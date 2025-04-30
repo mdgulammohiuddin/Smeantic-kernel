@@ -1,0 +1,38 @@
+async def run_document_intelligence_agent():
+   
+ 
+    # 1. Create the client
+    async with (
+        DefaultAzureCredential() as creds,
+        AzureAIAgent.create_client(credential=creds, conn_str=connection_string) as client,
+    ):
+        # 2. Retrieve or create the agent definition
+        agent_definition = await client.agents.get_agent("asst_S3RF1IrKXrkS09aYJNHalnWl")
+ 
+        # 3. Configure polling to wait longer
+        poll_opts = RunPollingOptions(
+            run_polling_interval=timedelta(seconds=1),
+            run_polling_timeout=timedelta(minutes=5),
+        )
+ 
+        # 4. Instantiate the Kernel agent with extended polling
+        agent = AzureAIAgent(
+            client=client,
+            definition=agent_definition,
+            plugins=[DBAgentManager()],
+            polling_options=poll_opts,
+        )
+ 
+        thread = None
+        user_input = "Get all the available data from the app_images_tb table. Every Image should be fetched."
+ 
+        # 5. Invoke—now your code will wait up to 5 minutes
+        async for response in agent.invoke(messages=user_input, thread=thread):
+            print(response)
+            thread = response.thread
+ 
+async def main():
+    await run_document_intelligence_agent()
+ 
+if __name__ == "__main__":
+    asyncio.run(main())
