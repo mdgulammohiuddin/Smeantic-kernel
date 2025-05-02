@@ -1,0 +1,16 @@
+Function failed. Error: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'
+Error invoking function DBAgentManager-fetch_five_images: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'.
+Traceback (most recent call last):
+  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/kernel.py", line 423, in _inner_auto_function_invoke_handler
+    result = await context.function.invoke(context.kernel, context.arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/functions/kernel_function.py", line 258, in invoke
+    raise e
+  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/functions/kernel_function.py", line 250, in invoke
+    await stack(function_context)
+  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/functions/kernel_function_from_method.py", line 103, in _invoke_internal
+    result = self.method(**function_arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'
+Function failed. Error: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'
+Error invoking function DBAgentManager-fetch_five_images: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'.
