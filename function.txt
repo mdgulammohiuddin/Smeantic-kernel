@@ -1,0 +1,67 @@
+def compress_base64_image(base64_str, quality=40, max_size=(512, 512)):
+        try:
+            if base64_str.startswith("data:image"):
+                header, base64_str = base64_str.split(",", 1)
+    
+            base64_str += "=" * (-len(base64_str) % 4)
+            image_data = base64.b64decode(base64_str)
+            img = Image.open(io.BytesIO(image_data))
+            img.thumbnail(max_size)
+    
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", quality=quality)
+            compressed_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            return f"data:image/jpeg;base64,{compressed_b64}"
+        except Exception as e:
+            print(f"Compression failed: {e}")
+
+            
+    @kernel_function(description="Get the current images from the app_images_tb")
+    def fetch_five_images(app_name):
+        connection = None
+        cursor = None
+        try:
+            connection = psycopg2.connect(
+                host="your-host",
+                database="your-db",
+                user="your-user",
+                password="your-password",
+                port="5432"
+            )
+            cursor = connection.cursor()
+            cursor.execute(
+                "SELECT app_images FROM app_images_tb WHERE app_name = %s;",
+                (app_name,)
+            )
+            result = cursor.fetchone()
+            if not result:
+                return {"status": False, "message": "No images found"}
+    
+            # Parse image list
+            raw_images = json.loads(result[0])
+            image_list = (
+                list(raw_images.values())
+                if isinstance(raw_images, dict)
+                else raw_images
+            )
+    
+            compressed_images = []
+            for i, img in enumerate(image_list[:5]):
+                compressed = compress_base64_image(img)
+                if compressed:
+                    compressed_images.append(compressed)
+                else:
+                    compressed_images.append(None)
+    
+            return {
+                "status": True,
+                "total_images": len(compressed_images),
+                "images": compressed_images,
+                "message": "Fetched and compressed up to 5 images."
+            }
+    
+        except Exception as e:
+            return {"status": False, "message": str(e)}
+        finally:
+            if cursor: cursor.close()
+            if connection: connection.close()
