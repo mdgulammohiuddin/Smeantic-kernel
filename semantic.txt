@@ -1,5 +1,15 @@
+import asyncio
+from datetime import timedelta
+ 
+from azure.identity.aio import DefaultAzureCredential
+from semantic_kernel.agents import AzureAIAgent, AzureAIAgentSettings
+from semantic_kernel.agents.open_ai.run_polling_options import RunPollingOptions
+from modules.service_modules.DBAgentManager import DBAgentManager
+ 
+connection_string = "eastus2.api.azureml.ms;fadc8103-c480-476e-bfdf-2cdd2710d184;rg-FusionCenter;1000070963-0391" 
+ 
 async def run_document_intelligence_agent():
-   
+    
  
     # 1. Create the client
     async with (
