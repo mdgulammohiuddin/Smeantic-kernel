@@ -47,7 +47,7 @@ def compress_base64_image(base64_str, quality=40, max_size=(512, 512)):
     
             compressed_images = []
             for i, img in enumerate(image_list[:5]):
-                compressed = compress_base64_image(img)
+                compressed = DBAgentManager.compress_base64_image(img)
                 if compressed:
                     compressed_images.append(compressed)
                 else:
