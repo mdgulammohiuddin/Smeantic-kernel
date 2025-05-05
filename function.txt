@@ -3,52 +3,65 @@
         connection = None
         cursor = None
         try:
+            # Establish database connection
             connection = psycopg2.connect(
                 host="c-cdb-postgres-hni-oth-dev1-5.hskoo4dosu4n6i.postgres.cosmos.azure.com",
                 database="citus",
                 user="citus",
-                password="sagjhqeTHJk452",
+                password="sagjhqeTHJk452",  # Consider using environment variables for security
                 port="5432"
             )
             cursor = connection.cursor()
+            
+            # Execute query
             query = "SELECT * FROM app_images_tb WHERE app_name = 'AITalentQuest';"
             cursor.execute(query)
-            result = cursor.fetchall
-            print(f"Result -->{result}")
-            if result["status"]:
-            # Get column names from cursor description
-                if len(result["output"]) > 0:
-                    data = result["output"][0]
-                    column_names = result["columns"]
-                    images = dict(zip(column_names, data))
-                    
-                    # sample = json.loads(images['app_images'])
-                    images['app_images'] = json.loads(images['app_images'])
-                else:
-                    return {
+            result = cursor.fetchall()  # Fetch all rows
+            print(f"Result-->{result}")
+            # Get column names from cursor.description
+            column_names = [desc[0] for desc in cursor.description]
+            print(f"column names-->{column_names}")
+            # Check if any rows were returned
+            if len(result) == 0:
+                return {
                     "status": False,
                     "output": {},
                     "message": "Images Not Found",
                     "error": ""
+                }
+            
+            # Convert the first row to a dictionary
+            images = dict(zip(column_names, result[0]))
+            
+            # Parse app_images as JSON if it exists
+            if 'app_images' in images and images['app_images']:
+                try:
+                    images['app_images'] = json.loads(images['app_images'])
+                except json.JSONDecodeError as e:
+                    return {
+                        "status": False,
+                        "output": {},
+                        "message": "Failed to parse app_images JSON",
+                        "error": str(e)
                     }
-            else:
-                return {
-                "status": False,
-                "output": {},
-                "message": "Failed to Fetch Images",
-                "error": ""
-            }
-            # Set default values to 0 for all columns
-        
+            
             return {
                 "status": True,
                 "output": images,
                 "message": "Images Fetched Successfully",
                 "error": ""
             }
-    
+        
+        except psycopg2.Error as e:
+            # Handle database-specific errors
+            return {
+                "status": False,
+                "output": {},
+                "message": "Database error occurred",
+                "error": str(e)
+            }
         except Exception as e:
-            
+            # Handle other errors
             return {
                 "status": False,
                 "output": {},
