@@ -1,23 +1,5 @@
-def compress_base64_image(base64_str, quality=40, max_size=(512, 512)):
-        try:
-            if base64_str.startswith("data:image"):
-                header, base64_str = base64_str.split(",", 1)
-    
-            base64_str += "=" * (-len(base64_str) % 4)
-            image_data = base64.b64decode(base64_str)
-            img = Image.open(io.BytesIO(image_data))
-            img.thumbnail(max_size)
-    
-            buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=quality)
-            compressed_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-            return f"data:image/jpeg;base64,{compressed_b64}"
-        except Exception as e:
-            print(f"Compression failed: {e}")
-
-            
-    @kernel_function(description="Get the current images from the app_images_tb")
-    def fetch_five_images(self):
+@kernel_function(description="Get the current images from the app_images_tb")
+    def fetch_images(self):
         connection = None
         cursor = None
         try:
@@ -29,39 +11,54 @@ def compress_base64_image(base64_str, quality=40, max_size=(512, 512)):
                 port="5432"
             )
             cursor = connection.cursor()
-            cursor.execute(
-                "SELECT * FROM app_images_tb WHERE app_name = 'AITalentQuest';"
-                
-            )
-            result = cursor.fetchall()
-            if not result:
-                return {"status": False, "message": "No images found"}
-    
-            # Parse image list
-            raw_images = json.loads(result[0])
-            image_list = (
-                list(raw_images.values())
-                if isinstance(raw_images, dict)
-                else raw_images
-            )
-            
-            compressed_images = []
-            for i, img in enumerate(image_list[:5]):
-                compressed = self.compress_base64_image(img)
-                if compressed:
-                    compressed_images.append(compressed)
+            query = "SELECT * FROM app_images_tb WHERE app_name = 'AITalentQuest';"
+            cursor.execute(query)
+            result = cursor.fetchall
+            print(f"Result -->{result}")
+            if result["status"]:
+            # Get column names from cursor description
+                if len(result["output"]) > 0:
+                    data = result["output"][0]
+                    column_names = result["columns"]
+                    images = dict(zip(column_names, data))
+                    
+                    # sample = json.loads(images['app_images'])
+                    images['app_images'] = json.loads(images['app_images'])
                 else:
-                    compressed_images.append(None)
-    
+                    return {
+                    "status": False,
+                    "output": {},
+                    "message": "Images Not Found",
+                    "error": ""
+                    }
+            else:
+                return {
+                "status": False,
+                "output": {},
+                "message": "Failed to Fetch Images",
+                "error": ""
+            }
+            # Set default values to 0 for all columns
+        
             return {
                 "status": True,
-                "total_images": len(compressed_images),
-                "images": compressed_images,
-                "message": "Fetched and compressed up to 5 images."
+                "output": images,
+                "message": "Images Fetched Successfully",
+                "error": ""
             }
     
         except Exception as e:
-            return {"status": False, "message": str(e)}
+            
+            return {
+                "status": False,
+                "output": {},
+                "message": "Failed to Fetch Images",
+                "error": str(e)
+            }
+        
         finally:
-            if cursor: cursor.close()
-            if connection: connection.close()
+            print("In finally of fetch_images")
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
