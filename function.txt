@@ -17,23 +17,23 @@ def compress_base64_image(base64_str, quality=40, max_size=(512, 512)):
 
             
     @kernel_function(description="Get the current images from the app_images_tb")
-    def fetch_five_images(app_name):
+    def fetch_five_images(self):
         connection = None
         cursor = None
         try:
             connection = psycopg2.connect(
-                host="your-host",
-                database="your-db",
-                user="your-user",
-                password="your-password",
+                host="c-cdb-postgres-hni-oth-dev1-5.hskoo4dosu4n6i.postgres.cosmos.azure.com",
+                database="citus",
+                user="citus",
+                password="sagjhqeTHJk452",
                 port="5432"
             )
             cursor = connection.cursor()
             cursor.execute(
-                "SELECT app_images FROM app_images_tb WHERE app_name = %s;",
-                (app_name,)
+                "SELECT * FROM app_images_tb WHERE app_name = 'AITalentQuest';"
+                
             )
-            result = cursor.fetchone()
+            result = cursor.fetchall()
             if not result:
                 return {"status": False, "message": "No images found"}
     
@@ -44,10 +44,10 @@ def compress_base64_image(base64_str, quality=40, max_size=(512, 512)):
                 if isinstance(raw_images, dict)
                 else raw_images
             )
-    
+            
             compressed_images = []
             for i, img in enumerate(image_list[:5]):
-                compressed = DBAgentManager.compress_base64_image(img)
+                compressed = self.compress_base64_image(img)
                 if compressed:
                     compressed_images.append(compressed)
                 else:
