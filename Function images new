@@ -1,0 +1,58 @@
+if isinstance(raw, str):
+            images_obj = json.loads(raw)
+        else:
+            images_obj = raw
+
+        # Normalize to list
+        image_list = list(images_obj.values()) if isinstance(images_obj, dict) else images_obj
+
+        compressed_images = []
+        for img_b64 in image_list[:5]:
+            compressed_images.append(self.compress_base64_image(img_b64) or None)
+
+        return {
+            "status": True,
+            "total_images": len(compressed_images),
+            "images": compressed_images,
+            "message": "Fetched and compressed up to 5 images."
+        }
+
+    except Exception as e:
+        return {"status": False, "message": str(e)}
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+4. A few extra tips
+Print out what you fetched right before parsing, e.g.
+
+python
+Copy code
+print("Raw row:", row)
+so you can see exactly what’s coming back.
+
+Use parameterized queries (the %s and tuple) to avoid SQL-injection.
+
+If your column is already of PostgreSQL type jsonb, psycopg2 will return it as a Python dict—skip the json.loads.
+
+Always call cur.fetchone() instead of fetchall() if you only need one row.
+
+With these changes, you’ll be passing a clean JSON string (or Python object) into your loader and the “invalid JSON” error will disappear.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ChatGPT can make mistakes. Check important info. See Cookie Preferences.
