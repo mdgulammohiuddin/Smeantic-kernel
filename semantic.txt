@@ -1,3 +1,80 @@
+# import asyncio
+# from azure.identity.aio import DefaultAzureCredential
+# from semantic_kernel.agents import AzureAIAgent, AzureAIAgentSettings
+# from modules.service_modules.DBAgentManager import DBAgentManager
+# from azure.core.pipeline.policies import RetryPolicy
+# from azure.core.pipeline.transport import AioHttpTransport
+
+# # from modules.tools.document_intelligence_plugin import DocumentIntelligencePlugin
+# connection_string = "eastus2.api.azureml.ms;fadc8103-c480-476e-bfdf-2cdd2710d184;rg-FusionCenter;1000070963-0391" 
+# async def run_document_intelligence_agent():
+#     # ai_agent_settings = AzureAIAgentSettings()
+    # async with (
+    #     DefaultAzureCredential() as creds,
+    #     AzureAIAgent.create_client(credential=creds, conn_str=connection_string) as client,
+    # ):
+#         retry_policy = RetryPolicy(
+#             # total_retries=3,
+#             # connect_retries=1,
+#             # read_retries=1,
+#             # retry_mode="exponential",
+#             # retry_backoff_max=30,
+#             # retry_backoff_factor=1.0,
+#             # timeout=600
+#             total_retries=5,
+#             connect_retries=2,
+#             read_retries=2,
+#             retry_mode="exponential",
+#             retry_backoff_max=60,
+#             retry_backoff_factor=1.5,
+#             timeout=1200 
+#         )
+        
+#         transport = AioHttpTransport(connection_timeout=30, read_timeout=180)
+#         agent_definition = await client.agents.get_agent("asst_S3RF1IrKXrkS09aYJNHalnWl")
+#         print(f"creds---- {client.__dict__}")
+#         # agent_definition = await client.agents.create_agent(
+#         #     model="gpt-4o-mini",
+#         #     name="Final_DB_Agent",
+#         #     instructions="You are a helpful agent who works with the database and get the desired result. First get the schema from db and try to form the query. Use the provided functions to help answer questions. Dont provide any extra information, give only the required answer",
+            
+#         # )
+#         print(f'Agent Definition  --- {agent_definition}'  )
+#         agent = AzureAIAgent(
+#             client=client,
+#             definition=agent_definition,
+#              plugins=[DBAgentManager()],  
+#         )
+        
+#         print(f'Agent Obj -- {agent}')
+        
+#         thread = None
+#         try:
+#             user_input= "Get all the data available in the categories table, I have provided the tool - 'func-fusion-center'. Use this tool and execute the query present in the tool and give me the DATA in JSON format "
+#             async for response in agent.invoke(
+#                     messages=user_input,
+#                     thread=thread,
+#                 ):
+#                 print(f'Thread Response----- {response}')
+#                 # print(f"# {response.name}: {response}")
+#                 thread = response.thread
+#                 print(f'Thread ----- {thread}')
+                
+                
+#         finally:
+#             pass
+#             # 5. Cleanup: Delete the thread and agent
+#             # await thread.delete() if thread else None
+#             # await client.agents.delete_agent(agent.id)
+        
+ 
+# async def main():
+#     result = await run_document_intelligence_agent()
+#     print(f'Value -- {result}') 
+ 
+# if __name__ == "__main__":
+#     asyncio.run(main())
+
 import asyncio
 from datetime import timedelta
  
@@ -34,7 +111,7 @@ async def run_document_intelligence_agent():
         )
  
         thread = None
-        user_input = "Get all the available data from the app_images_tb table. Every Image should be fetched."
+        user_input = "Get all the available data from the app_images_tb table."
  
         # 5. Invoke—now your code will wait up to 5 minutes
         async for response in agent.invoke(messages=user_input, thread=thread):
