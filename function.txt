@@ -1,5 +1,4 @@
-@kernel_function(description="Get the current images from the app_images_tb")
-    def fetch_images(self):
+def fetch_images(self):
         connection = None
         cursor = None
         try:
@@ -17,7 +16,7 @@
             query = "SELECT * FROM app_images_tb WHERE app_name = 'AITalentQuest';"
             cursor.execute(query)
             result = cursor.fetchall()  # Fetch all rows
-            print(f"Result-->{result}")
+            # print(f"Result-->{result}")
             # Get column names from cursor.description
             column_names = [desc[0] for desc in cursor.description]
             print(f"column names-->{column_names}")
