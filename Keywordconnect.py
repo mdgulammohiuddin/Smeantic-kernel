@@ -30,8 +30,9 @@ OUTPUT_FILE = "keyword_network.json"
 CHUNK_SIZE = 10000  # Adjust based on memory
 MAX_KEYWORDS = 1000  # Maximum number of unique keywords
 MIN_SUBGRAPH_SIZE = 3  # Minimum keywords for sufficiency
-MIN_EDGE_WEIGHT = 7                # Minimum edge weight for sufficiency
+MIN_EDGE_WEIGHT = 7    # Minimum edge weight for sufficiency
 SIMILARITY_THRESHOLD = 0.7  # Minimum similarity for edges
+EXCEL_READ_CHUNK_SIZE = 10000  # Chunk size for reading Excel files
 
 # Step 1: Preprocess text
 stop_words = set(stopwords.words('english'))
@@ -40,7 +41,7 @@ def preprocess_text(text):
     text = str(text).lower()
     text = re.sub(r'[^\w\s]', '', text)
     tokens = word_tokenize(text)
-    tokens = [word for word in tokens if word not in stop_words and len(word) > 2]
+    tokens Rh= [word for word in tokens if word not in stop_words and len(word) > 2]
     return ' '.join(tokens)
 
 # Step 2: Process chunk of descriptions
@@ -49,7 +50,16 @@ def process_chunk(chunk, chunk_id):
     chunk['Cleaned_Description'] = chunk['Description'].apply(preprocess_text)
     return chunk[['Cleaned_Description']]
 
-# Step 3: Extract unique keywords using TF-IDF
+# Step 3: Read Excel files in chunks and convert to dask DataFrame
+def read_excel_to_dask(file_path, chunk_size=EXCEL_READ_CHUNK_SIZE):
+    logging.info(f"Reading {file_path} in chunks")
+    chunks = []
+    for chunk in pd.read_excel(file_path, sheet_name=0, chunksize=chunk_size):
+        chunks.append(chunk)
+    # Convert chunks to dask DataFrame
+    return dd.from_pandas(pd.concat(chunks, ignore_index=True), npartitions=len(chunks))
+
+# Step 4: Extract unique keywords using TF-IDF
 def extract_unique_keywords(cleaned_texts, max_keywords=MAX_KEYWORDS):
     logging.info("Extracting unique keywords with TF-IDF")
     vectorizer = TfidfVectorizer(max_features=max_keywords)
@@ -61,7 +71,7 @@ def extract_unique_keywords(cleaned_texts, max_keywords=MAX_KEYWORDS):
     keyword_ranking.sort(key=lambda x: x[1], reverse=True)
     return [kw for kw, _ in keyword_ranking[:max_keywords]]
 
-# Step 4: Build keyword connection graph based on semantic similarity
+# Step 5: Build keyword connection graph based on semantic similarity
 def build_similarity_graph(keywords):
     G = nx.Graph()
     G.add_nodes_from(keywords)
@@ -75,7 +85,7 @@ def build_similarity_graph(keywords):
                 G.add_edge(kw1, kw2, weight=similarity * 10)  # Scale weight
     return G
 
-# Step 5: Refine connections iteratively
+# Step 6: Refine connections iteratively
 def refine_connections(graph, max_iterations=3):
     logging.info("Refining connections")
     G = graph.copy()
@@ -98,7 +108,7 @@ def refine_connections(graph, max_iterations=3):
             break
     return G
 
-# Step 6: Determine sufficiency for each keyword
+# Step 7: Determine sufficiency for each keyword
 def is_keyword_sufficient(keyword, graph):
     # Get subgraph of keyword and its neighbors
     neighbors = list(graph.neighbors(keyword))
@@ -108,7 +118,7 @@ def is_keyword_sufficient(keyword, graph):
     strong_edges = sum(1 for _, _, data in subgraph.edges(data=True) if data['weight'] >= MIN_EDGE_WEIGHT)
     return len(subgraph_nodes) >= MIN_SUBGRAPH_SIZE and strong_edges >= MIN_SUBGRAPH_SIZE - 1
 
-# Step 7: Get connected keywords
+# Step 8: Get connected keywords
 def get_connected_keywords(keyword, graph):
     connections = []
     for neighbor in graph.neighbors(keyword):
@@ -118,12 +128,11 @@ def get_connected_keywords(keyword, graph):
     connections.sort(key=lambda x: x['weight'], reverse=True)
     return connections
 
-# Step 8: Main processing
+# Step 9: Main processing
 def main():
-    # Read Excel files with dask
-    logging.info("Reading Excel files")
-    automatable_df = dd.read_excel(AUTOMATABLE_FILE, sheet_name=0)
-    non_automatable_df = dd.read_excel(NON_AUTOMATABLE_FILE, sheet_name=0)
+    # Read Excel files in chunks and convert to dask DataFrame
+    automatable_df = read_excel_to_dask(AUTOMATABLE_FILE)
+    non_automatable_df = read_excel_to_dask(NON_AUTOMATABLE_FILE)
     
     # Combine datasets
     df = dd.concat([automatable_df[['Description']], non_automatable_df[['Description']]])
@@ -156,7 +165,7 @@ def main():
         output["keywords"].append({
             "keyword": keyword,
             "connected_keywords": connected_keywords,
-            "is_sufficient": is_sufficient
+            "is_s        "is_sufficient": is_sufficient
         })
     
     # Write to JSON
