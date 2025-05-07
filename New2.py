@@ -9,6 +9,7 @@ import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
 import logging
 from pathlib import Path
+import tempfile
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,7 +26,7 @@ nlp = spacy.load("en_core_web_md", disable=["parser", "ner"])  # Medium model fo
 AUTOMATABLE_FILE = "automatable_use_cases.xlsx"  # Example: r"C:\Data\automatable_use_cases.xlsx" or "/home/user/data/automatable_use_cases.xlsx"
 NON_AUTOMATABLE_FILE = "non_automatable_use_cases.xlsx"  # Example: r"C:\Data\non_automatable_use_cases.xlsx" or "/home/user/data/non_automatable_use_cases.xlsx"
 OUTPUT_FILE = "keyword_network.json"  # Example: r"C:\Data\keyword_network.json" or "/home/user/data/keyword_network.json"
-CHUNK_SIZE = 10000  # Adjust based on memory
+BATCH_SIZE = 10000  # Number of rows to process in each batch
 MIN_SUBGRAPH_SIZE = 3  # Minimum keywords for sufficiency
 MIN_EDGE_WEIGHT = 7  # Minimum edge weight for sufficiency
 SIMILARITY_THRESHOLD = 0.7  # Minimum similarity for edges
@@ -40,23 +41,34 @@ def preprocess_text(text):
     tokens = [word for word in tokens if word not in stop_words and len(word) > 2]
     return ' '.join(tokens)
 
-# Step 2: Process Excel file in chunks
-def process_excel_file(file_path, chunk_size=CHUNK_SIZE):
+# Step 2: Process Excel file with batch processing
+def process_excel_file(file_path, temp_file, batch_size=BATCH_SIZE):
     logging.info(f"Processing {file_path}")
     if not Path(file_path).exists():
         logging.error(f"File not found: {file_path}")
         raise FileNotFoundError(f"File not found: {file_path}")
-    cleaned_texts = []
-    for chunk in pd.read_excel(file_path, sheet_name=0, chunksize=chunk_size):
-        chunk['Cleaned_Description'] = chunk['Description'].apply(preprocess_text)
-        cleaned_texts.extend(chunk['Cleaned_Description'].tolist())
-        logging.info(f"Processed chunk of {len(chunk)} rows from {file_path}")
-    return cleaned_texts
+    
+    # Read the entire Excel file
+    df = pd.read_excel(file_path, sheet_name=0)
+    logging.info(f"Loaded {len(df)} rows from {file_path}")
+    
+    # Process in batches
+    first_batch = True
+    for start in range(0, len(df), batch_size):
+        end = min(start + batch_size, len(df))
+        batch = df.iloc[start:end]
+        batch['Cleaned_Description'] = batch['Description'].apply(preprocess_text)
+        mode = 'w' if first_batch else 'a'
+        header = first_batch
+        batch[['Cleaned_Description']].to_csv(temp_file, mode=mode, header=header, index=False)
+        first_batch = False
+        logging.info(f"Processed batch of {len(batch)} rows from {file_path}")
+    
+    return temp_file
 
 # Step 3: Extract unique keywords using TF-IDF
 def extract_unique_keywords(cleaned_texts):
     logging.info("Extracting unique keywords with TF-IDF")
-    # Remove max_features to extract all possible keywords
     vectorizer = TfidfVectorizer()
     tfidf_matrix = vectorizer.fit_transform(cleaned_texts)
     feature_names = vectorizer.get_feature_names_out()
@@ -92,7 +104,7 @@ def refine_connections(graph, max_iterations=3):
             for i, n1 in enumerate(neighbors):
                 for n2 in neighbors[i+1:]:
                     if not G.has_edge(n1, n2):
-                        # Estimate transitive weight (average of paths through node)
+                        # Estimate transitive weight
                         weight1 = G[node][n1]['weight']
                         weight2 = G[node][n2]['weight']
                         transitive_weight = (weight1 + weight2) / 2
@@ -106,11 +118,9 @@ def refine_connections(graph, max_iterations=3):
 
 # Step 6: Determine sufficiency for each keyword
 def is_keyword_sufficient(keyword, graph):
-    # Get subgraph of keyword and its neighbors
     neighbors = list(graph.neighbors(keyword))
     subgraph_nodes = [keyword] + neighbors
     subgraph = graph.subgraph(subgraph_nodes)
-    # Check if subgraph is sufficient
     strong_edges = sum(1 for _, _, data in subgraph.edges(data=True) if data['weight'] >= MIN_EDGE_WEIGHT)
     return len(subgraph_nodes) >= MIN_SUBGRAPH_SIZE and strong_edges >= MIN_SUBGRAPH_SIZE - 1
 
@@ -120,55 +130,63 @@ def get_connected_keywords(keyword, graph):
     for neighbor in graph.neighbors(keyword):
         weight = graph[keyword][neighbor]['weight']
         connections.append({"keyword": neighbor, "weight": weight})
-    # Sort by weight descending
     connections.sort(key=lambda x: x['weight'], reverse=True)
     return connections
 
 # Step 8: Main processing
 def main():
-    # Process both Excel files
-    logging.info("Reading and processing Excel files")
-    automatable_texts = process_excel_file(AUTOMATABLE_FILE)
-    non_automatable_texts = process_excel_file(NON_AUTOMATABLE_FILE)
+    # Create temporary file for cleaned texts
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
+        temp_file_path = temp_file.name
     
-    # Combine cleaned texts
-    cleaned_texts = automatable_texts + non_automatable_texts
-    logging.info(f"Total descriptions processed: {len(cleaned_texts)}")
+    try:
+        # Process both Excel files
+        logging.info("Reading and processing Excel files")
+        process_excel_file(AUTOMATABLE_FILE, temp_file_path)
+        process_excel_file(NON_AUTOMATABLE_FILE, temp_file_path)
+        
+        # Read cleaned texts from temporary file
+        logging.info("Reading cleaned texts from temporary file")
+        cleaned_texts = pd.read_csv(temp_file_path)['Cleaned_Description'].tolist()
+        
+        # Filter out empty texts
+        cleaned_texts = [text for text in cleaned_texts if text.strip()]
+        if not cleaned_texts:
+            logging.error("No valid descriptions found after preprocessing")
+            return
+        
+        # Extract unique keywords
+        unique_keywords = extract_unique_keywords(cleaned_texts)
+        
+        # Build and refine similarity graph
+        similarity_graph = build_similarity_graph(unique_keywords)
+        refined_graph = refine_connections(similarity_graph)
+        
+        # Prepare output
+        logging.info("Preparing output")
+        output = {
+            "keywords": []
+        }
+        for keyword in unique_keywords:
+            is_sufficient = is_keyword_sufficient(keyword, refined_graph)
+            connected_keywords = get_connected_keywords(keyword, refined_graph)
+            output["keywords"].append({
+                "keyword": keyword,
+                "connected_keywords": connected_keywords,
+                "is_sufficient": is_sufficient
+            })
+        
+        # Write to JSON
+        logging.info("Writing results to JSON")
+        output_dir = Path(OUTPUT_FILE).parent
+        if output_dir != Path("."):
+            output_dir.mkdir(parents=True, exist_ok=True)
+        with open(OUTPUT_FILE, 'w') as f:
+            json.dump(output, f, indent=4)
     
-    # Filter out empty texts
-    cleaned_texts = [text for text in cleaned_texts if text.strip()]
-    if not cleaned_texts:
-        logging.error("No valid descriptions found after preprocessing")
-        return
-    
-    # Extract unique keywords
-    unique_keywords = extract_unique_keywords(cleaned_texts)
-    
-    # Build and refine similarity graph
-    similarity_graph = build_similarity_graph(unique_keywords)
-    refined_graph = refine_connections(similarity_graph)
-    
-    # Prepare output
-    logging.info("Preparing output")
-    output = {
-        "keywords": []
-    }
-    for keyword in unique_keywords:
-        is_sufficient = is_keyword_sufficient(keyword, refined_graph)
-        connected_keywords = get_connected_keywords(keyword, refined_graph)
-        output["keywords"].append({
-            "keyword": keyword,
-            "connected_keywords": connected_keywords,
-            "is_sufficient": is_sufficient
-        })
-    
-    # Write to JSON
-    logging.info("Writing results to JSON")
-    output_dir = Path(OUTPUT_FILE).parent
-    if output_dir != Path("."):
-        output_dir.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_FILE, 'w') as f:
-        json.dump(output, f, indent=4)
+    finally:
+        # Clean up temporary file
+        Path(temp_file_path).unlink()
 
 if __name__ == '__main__':
     main()
