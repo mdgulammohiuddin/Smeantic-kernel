@@ -29,19 +29,18 @@ nltk.download('stopwords')
 nlp = spacy.load("en_core_web_md", disable=["parser", "ner"])
 
 # Configuration
-# Update these paths to your Excel files and JSON output location
 AUTOMATABLE_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Automatable_Use_cases 5 (1).xlsx"
 NON_AUTOMATABLE_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Non-Automatable_use_cases (1).xlsx"
 OUTPUT_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\keyword_network.json"
-BATCH_SIZE = 10000  # Rows per batch
-MIN_SUBGRAPH_SIZE = 3  # Minimum keywords for sufficiency
-MIN_EDGE_WEIGHT = 7  # Minimum edge weight for sufficiency
-SIMILARITY_THRESHOLD = 0.9  # Increased to reduce initial edges
-MAX_SEQUENCE_LENGTH = 3  # Maximum length of sequences
-TFIDF_SCORE_THRESHOLD = 0.2  # Filter keywords
-MAX_NEW_EDGES = 10000  # Maximum new edges per iteration
-MAX_SEQUENCES = 500  # Reduced maximum sequences
-MAX_NODES_FOR_SEQUENCES = 500  # Sample nodes for sequences
+BATCH_SIZE = 10000
+MIN_SUBGRAPH_SIZE = 3
+MIN_EDGE_WEIGHT = 7
+SIMILARITY_THRESHOLD = 0.9
+MAX_SEQUENCE_LENGTH = 3
+TFIDF_SCORE_THRESHOLD = 0.2
+MAX_NEW_EDGES = 10000
+MAX_SEQUENCES = 500
+MAX_NODES_FOR_SEQUENCES = 500
 
 # Step 1: Preprocess text
 stop_words = set(stopwords.words('english'))
@@ -68,7 +67,7 @@ def process_excel_file(file_path, temp_file, batch_size=BATCH_SIZE):
     first_batch = True
     for start in range(0, len(df), batch_size):
         end = min(start + batch_size, len(df))
-        batch = df.iloc[start:end].copy()  # Create a copy to avoid SettingWithCopyWarning
+        batch = df.iloc[start:end].copy()
         batch.loc[:, 'Cleaned_Description'] = batch['Description'].apply(preprocess_text)
         mode = 'w' if first_batch else 'a'
         header = first_batch
@@ -87,7 +86,10 @@ def extract_unique_keywords(cleaned_texts):
     keyword_scores = tfidf_matrix.sum(axis=0).A1
     keyword_ranking = [(feature_names[i], keyword_scores[i]) for i in range(len(feature_names))]
     keyword_ranking.sort(key=lambda x: x[1], reverse=True)
-    keyword_ranking = [(kw, score) for kw, score in keyword_ranking if score >= TFIDF_SCORE_THRESHOLD]
+    keyword_ranking = [(kw, score) for kw, score in keyword_ranking if score >= TFIDF_SCORE_THRESHOLD and re.match(r'^[a-zA-Z0-9]+$', kw)]
+    for kw, _ in keyword_ranking:
+        if not re.match(r'^[a-zA-Z0-9]+$', kw):
+            logging.warning(f"Invalid keyword filtered: {kw}")
     logging.info(f"Extracted {len(keyword_ranking)} unique keywords after filtering")
     return [kw for kw, _ in keyword_ranking]
 
@@ -96,12 +98,13 @@ def build_similarity_graph(keywords):
     G = nx.Graph()
     valid_keywords = []
     keyword_tokens = []
-    # Filter keywords with valid embeddings
     for kw in keywords:
         token = nlp(kw)
         if token.has_vector and not token.vector_norm == 0:
             valid_keywords.append(kw)
             keyword_tokens.append(token)
+        else:
+            logging.warning(f"Keyword {kw} skipped due to empty or invalid embedding")
     G.add_nodes_from(valid_keywords)
     logging.info(f"Building similarity graph with {len(valid_keywords)} valid keywords")
     for i, token1 in enumerate(keyword_tokens):
@@ -111,6 +114,7 @@ def build_similarity_graph(keywords):
                 if similarity > SIMILARITY_THRESHOLD:
                     G.add_edge(valid_keywords[i], valid_keywords[j], weight=similarity * 10)
             except:
+                logging.warning(f"Similarity calculation failed for {valid_keywords[i]} and {valid_keywords[j]}")
                 continue
     return G
 
@@ -150,24 +154,31 @@ def refine_connections(graph, max_iterations=2):
 
 # Step 6: Determine sufficiency
 def is_sufficient(nodes, graph):
-    subgraph = graph.subgraph(nodes)
-    strong_edges = sum(1 for _, _, data in subgraph.edges(data=True) if data['weight'] >= MIN_EDGE_WEIGHT)
-    return len(subgraph.nodes) >= MIN_SUBGRAPH_SIZE and strong_edges >= MIN_SUBGRAPH_SIZE - 1
+    try:
+        subgraph = graph.subgraph(nodes)
+        strong_edges = sum(1 for _, _, data in subgraph.edges(data=True) if data['weight'] >= MIN_EDGE_WEIGHT)
+        return len(subgraph.nodes) >= MIN_SUBGRAPH_SIZE and strong_edges >= MIN_SUBGRAPH_SIZE - 1
+    except nx.NetworkXError as e:
+        logging.error(f"Sufficiency check failed: {e}")
+        return False
 
 # Step 7: Get connected keywords
 def get_connected_keywords(keyword, graph):
-    connections = []
-    for neighbor in graph.neighbors(keyword):
-        weight = graph[keyword][neighbor]['weight']
-        connections.append({"keyword": neighbor, "weight": weight})
-    connections.sort(key=lambda x: x['weight'], reverse=True)
-    return connections
+    try:
+        connections = []
+        for neighbor in graph.neighbors(keyword):
+            weight = graph[keyword][neighbor]['weight']
+            connections.append({"keyword": neighbor, "weight": weight})
+        connections.sort(key=lambda x: x['weight'], reverse=True)
+        return connections
+    except nx.NetworkXError as e:
+        logging.error(f"Error getting connected keywords for {keyword}: {e}")
+        return []
 
 # Step 8: Find sequences (paths in the graph)
 def find_sequences(graph, max_length=MAX_SEQUENCE_LENGTH):
     sequences = []
     sequence_count = 0
-    # Sample a subset of nodes to reduce computation
     nodes = list(graph.nodes())
     if len(nodes) > MAX_NODES_FOR_SEQUENCES:
         nodes = random.sample(nodes, MAX_NODES_FOR_SEQUENCES)
@@ -176,14 +187,18 @@ def find_sequences(graph, max_length=MAX_SEQUENCE_LENGTH):
         for length in range(2, max_length + 1):
             for target in nodes:
                 if node != target:
-                    paths = list(nx.all_simple_paths(graph, node, target, cutoff=length))
-                    for path in paths:
-                        if len(path) >= 2:
-                            sequences.append(path)
-                            sequence_count += 1
-                            if sequence_count >= MAX_SEQUENCES:
-                                logging.info(f"Stopping sequence generation at {sequence_count} sequences")
-                                return sequences
+                    try:
+                        paths = list(nx.all_simple_paths(graph, node, target, cutoff=length))
+                        for path in paths:
+                            if len(path) >= 2:
+                                sequences.append(path)
+                                sequence_count += 1
+                                if sequence_count >= MAX_SEQUENCES:
+                                    logging.info(f"Stopping sequence generation at {sequence_count} sequences")
+                                    return sequences
+                    except nx.NetworkXError as e:
+                        logging.error(f"Error generating paths for {node} to {target}: {e}")
+                        continue
     return sequences
 
 # Step 9: Get nested sequences
@@ -198,24 +213,20 @@ def get_nested_sequences(sequence):
 
 # Step 10: Main processing
 def main():
-    # Create temporary files for each category
     with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_auto, \
          tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_nonauto:
         temp_auto_path = temp_auto.name
         temp_nonauto_path = temp_nonauto.name
     
     try:
-        # Process Excel files
         logging.info("Reading and processing Excel files")
         process_excel_file(AUTOMATABLE_FILE, temp_auto_path)
         process_excel_file(NON_AUTOMATABLE_FILE, temp_nonauto_path)
         
-        # Read cleaned texts
         logging.info("Reading cleaned texts")
         auto_texts = pd.read_csv(temp_auto_path)['Cleaned_Description'].tolist()
         nonauto_texts = pd.read_csv(temp_nonauto_path)['Cleaned_Description'].tolist()
         
-        # Filter empty texts, handling non-string values
         auto_texts = [text for text in auto_texts if isinstance(text, str) and text.strip()]
         nonauto_texts = [text for text in nonauto_texts if isinstance(text, str) and text.strip()]
         
@@ -223,28 +234,28 @@ def main():
             logging.error("No valid descriptions found")
             return
         
-        # Extract keywords
         logging.info("Extracting keywords")
         auto_keywords = extract_unique_keywords(auto_texts) if auto_texts else []
         nonauto_keywords = extract_unique_keywords(nonauto_texts) if nonauto_texts else []
         
-        # Build and refine graphs
         auto_graph = build_similarity_graph(auto_keywords) if auto_keywords else nx.Graph()
         nonauto_graph = build_similarity_graph(nonauto_keywords) if nonauto_keywords else nx.Graph()
         auto_graph = refine_connections(auto_graph)
         nonauto_graph = refine_connections(nonauto_graph)
         
-        # Prepare output
+        # Filter keywords to match graph nodes
+        auto_keywords = [kw for kw in auto_keywords if kw in auto_graph.nodes()]
+        nonauto_keywords = [kw for kw in nonauto_keywords if kw in nonauto_graph.nodes()]
+        logging.info(f"Filtered to {len(auto_keywords)} automatable and {len(nonauto_keywords)} non-automatable keywords in graphs")
+        
         output = []
         
-        # Automatable category
         if auto_keywords:
             auto_output = {
                 "Category": "automatable",
                 "Keywords": [],
                 "Sequences": []
             }
-            # Keywords
             for keyword in auto_keywords:
                 nested_keywords = get_connected_keywords(keyword, auto_graph)
                 is_suff = is_sufficient([keyword] + [nk["keyword"] for nk in nested_keywords], auto_graph)
@@ -253,7 +264,6 @@ def main():
                     "nested_keywords": nested_keywords,
                     "is_sufficient": is_suff
                 })
-            # Sequences
             sequences = find_sequences(auto_graph)
             for seq in sequences:
                 nested_seqs = get_nested_sequences(seq)
@@ -265,14 +275,12 @@ def main():
                 })
             output.append(auto_output)
         
-        # Non-automatable category
         if nonauto_keywords:
             nonauto_output = {
                 "Category": "non_automatable",
                 "Keywords": [],
                 "Sequences": []
             }
-            # Keywords
             for keyword in nonauto_keywords:
                 nested_keywords = get_connected_keywords(keyword, nonauto_graph)
                 is_suff = is_sufficient([keyword] + [nk["keyword"] for nk in nested_keywords], nonauto_graph)
@@ -281,7 +289,6 @@ def main():
                     "nested_keywords": nested_keywords,
                     "is_sufficient": is_suff
                 })
-            # Sequences
             sequences = find_sequences(nonauto_graph)
             for seq in sequences:
                 nested_seqs = get_nested_sequences(seq)
@@ -293,7 +300,6 @@ def main():
                 })
             output.append(nonauto_output)
         
-        # Write to JSON
         logging.info("Writing results to JSON")
         output_dir = Path(OUTPUT_FILE).parent
         if output_dir != Path("."):
@@ -302,7 +308,6 @@ def main():
             json.dump(output, f, indent=4)
     
     finally:
-        # Clean up temporary files
         Path(temp_auto_path).unlink()
         Path(temp_nonauto_path).unlink()
 
