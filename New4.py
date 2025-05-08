@@ -36,7 +36,10 @@ MAX_SEQUENCE_LENGTH = 3  # Maximum length of sequences to consider
 stop_words = set(stopwords.words('english'))
 
 def preprocess_text(text):
-    text = str(text).lower()
+    # Handle NaN or non-string inputs
+    if pd.isna(text) or not isinstance(text, str):
+        return ""
+    text = text.lower()
     text = re.sub(r'[^\w\s]', '', text)
     tokens = word_tokenize(text)
     tokens = [word for word in tokens if word not in stop_words and len(word) > 2]
@@ -131,7 +134,6 @@ def get_connected_keywords(keyword, graph):
 def find_sequences(graph, max_length=MAX_SEQUENCE_LENGTH):
     sequences = []
     for node in graph.nodes():
-        # Find all simple paths starting from node
         for length in range(2, max_length + 1):
             for target in graph.nodes():
                 if node != target:
@@ -170,9 +172,9 @@ def main():
         auto_texts = pd.read_csv(temp_auto_path)['Cleaned_Description'].tolist()
         nonauto_texts = pd.read_csv(temp_nonauto_path)['Cleaned_Description'].tolist()
         
-        # Filter empty texts
-        auto_texts = [text for text in auto_texts if text.strip()]
-        nonauto_texts = [text for text in nonauto_texts if text.strip()]
+        # Filter empty texts, handling non-string values
+        auto_texts = [text for text in auto_texts if isinstance(text, str) and text.strip()]
+        nonauto_texts = [text for text in nonauto_texts if isinstance(text, str) and text.strip()]
         
         if not auto_texts and not nonauto_texts:
             logging.error("No valid descriptions found")
