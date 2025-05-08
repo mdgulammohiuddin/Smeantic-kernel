@@ -24,9 +24,9 @@ nltk.download('stopwords')
 KEYWORD_JSON = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\keyword_network.json"
 VALIDATION_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\validation_descriptions.xlsx"  # Update with your file path
 OUTPUT_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\sufficiency_results.xlsx"
-MIN_SUBGRAPH_SIZE = 3  # Minimum keywords for sufficiency (from original script)
+MIN_SUBGRAPH_SIZE = 3  # Minimum keywords for sufficiency
 
-# Step 1: Preprocess text (reuse from original script)
+# Step 1: Preprocess text
 stop_words = set(stopwords.words('english'))
 
 def preprocess_text(text):
@@ -77,7 +77,6 @@ def check_description_sufficiency(description, keywords, sequences, min_subgraph
     if not isinstance(description, str) or not description.strip():
         return False, [], []
     
-    # Preprocess description for consistency
     cleaned_desc = preprocess_text(description)
     matched_keywords = []
     matched_sequences = []
@@ -85,14 +84,12 @@ def check_description_sufficiency(description, keywords, sequences, min_subgraph
     # Check keywords
     for kw_item in keywords:
         keyword = kw_item['keyword']
-        # Use word boundary for exact match
         if re.search(r'\b' + re.escape(keyword) + r'\b', cleaned_desc, re.IGNORECASE):
             matched_keywords.append(keyword)
     
     # Check sequences
     for seq_item in sequences:
         sequence = seq_item['sequence']
-        # Check if all keywords in the sequence are present
         all_present = all(
             re.search(r'\b' + re.escape(kw) + r'\b', cleaned_desc, re.IGNORECASE)
             for kw in sequence
@@ -101,7 +98,6 @@ def check_description_sufficiency(description, keywords, sequences, min_subgraph
             matched_sequences.append(sequence)
     
     # Determine sufficiency
-    # 1. Check if enough keywords from a sufficient keyword set are matched
     sufficient_keyword_match = False
     for kw_item in keywords:
         if kw_item['is_sufficient']:
@@ -113,7 +109,6 @@ def check_description_sufficiency(description, keywords, sequences, min_subgraph
                 sufficient_keyword_match = True
                 break
     
-    # 2. Check if a sufficient sequence is fully matched
     sufficient_sequence_match = any(
         seq_item['is_sufficient'] and seq_item['sequence'] in matched_sequences
         for seq_item in sequences
@@ -133,6 +128,13 @@ def process_validation_file(validation_file, keyword_dict, sequence_dict):
     df = pd.read_excel(validation_file, sheet_name=0)
     logging.info(f"Loaded {len(df)} rows from {validation_file}")
     
+    # Verify required columns
+    required_columns = ['Short description', 'Description', 'Automatable']
+    if not all(col in df.columns for col in required_columns):
+        missing = [col for col in required_columns if col not in df.columns]
+        logging.error(f"Missing columns: {missing}")
+        raise ValueError(f"Validation file must contain columns: {required_columns}")
+    
     # Initialize result columns
     df['Is_Sufficient'] = False
     df['Matched_Keywords'] = ''
@@ -140,38 +142,31 @@ def process_validation_file(validation_file, keyword_dict, sequence_dict):
     
     # Process each description
     for idx, row in df.iterrows():
-        description = row['Description']
-        category = row.get('Category', None)  # Optional Category column
+        # Combine Short description and Description
+        short_desc = row['Short description']
+        desc = row['Description']
+        combined_desc = ' '.join(
+            [str(short_desc), str(desc)] if not pd.isna(short_desc) and not pd.isna(desc)
+            else [str(short_desc)] if not pd.isna(short_desc)
+            else [str(desc)] if not pd.isna(desc)
+            else ['']
+        )
         
-        # Select keywords and sequences based on category
+        # Get category from Automatable column
+        automatable = str(row['Automatable']).lower()
+        category = 'automatable' if automatable == 'automatable' else 'non_automatable'
+        
+        # Select keywords and sequences
         if category in keyword_dict:
             keywords = keyword_dict[category]
             sequences = sequence_dict[category]
         else:
-            # If no category, try both and use the best match
-            best_sufficient = False
-            best_keywords = []
-            best_sequences = []
-            for cat in keyword_dict:
-                is_suff, matched_kws, matched_seqs = check_description_sufficiency(
-                    description, keyword_dict[cat], sequence_dict[cat]
-                )
-                if is_suff:
-                    best_sufficient = True
-                    best_keywords = matched_kws
-                    best_sequences = matched_seqs
-                    break
-                elif len(matched_kws) > len(best_keywords):
-                    best_keywords = matched_kws
-                    best_sequences = matched_seqs
-            df.at[idx, 'Is_Sufficient'] = best_sufficient
-            df.at[idx, 'Matched_Keywords'] = ', '.join(best_keywords)
-            df.at[idx, 'Matched_Sequences'] = '; '.join([', '.join(seq) for seq in best_sequences])
+            logging.warning(f"Invalid Automatable value '{automatable}' at index {idx}, skipping")
             continue
         
-        # Check sufficiency for the specific category
+        # Check sufficiency
         is_suff, matched_kws, matched_seqs = check_description_sufficiency(
-            description, keywords, sequences
+            combined_desc, keywords, sequences
         )
         df.at[idx, 'Is_Sufficient'] = is_suff
         df.at[idx, 'Matched_Keywords'] = ', '.join(matched_kws)
