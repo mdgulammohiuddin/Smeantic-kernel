@@ -172,6 +172,15 @@ def process_validation_file(validation_file, keyword_dict, sequence_dict):
         df.at[idx, 'Matched_Keywords'] = ', '.join(matched_kws)
         df.at[idx, 'Matched_Sequences'] = '; '.join([', '.join(seq) for seq in matched_seqs])
     
+    # Calculate sufficiency percentages
+    total_rows = len(df)
+    sufficient_count = len(df[df['Is_Sufficient'] == True])
+    insufficient_count = total_rows - sufficient_count
+    sufficient_percent = (sufficient_count / total_rows * 100) if total_rows > 0 else 0
+    insufficient_percent = (insufficient_count / total_rows * 100) if total_rows > 0 else 0
+    
+    logging.info(f"Sufficiency Summary: {sufficient_count} sufficient ({sufficient_percent:.2f}%), {insufficient_count} insufficient ({insufficient_percent:.2f}%)")
+    
     logging.info(f"Processed {len(df)} descriptions")
     return df
 
