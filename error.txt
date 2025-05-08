@@ -1,16 +1,129 @@
-Function failed. Error: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'
-Error invoking function DBAgentManager-fetch_five_images: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'.
-Traceback (most recent call last):
-  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/kernel.py", line 423, in _inner_auto_function_invoke_handler
-    result = await context.function.invoke(context.kernel, context.arguments)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/functions/kernel_function.py", line 258, in invoke
-    raise e
-  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/functions/kernel_function.py", line 250, in invoke
-    await stack(function_context)
-  File "/app/fusion/fusion_venv/lib/python3.12/site-packages/semantic_kernel/functions/kernel_function_from_method.py", line 103, in _invoke_internal
-    result = self.method(**function_arguments)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'
-Function failed. Error: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'
-Error invoking function DBAgentManager-fetch_five_images: DBAgentManager.fetch_five_images() got multiple values for argument 'app_name'.
+[nltk_data] Downloading package punkt_tab to
+[nltk_data]     C:\Users\2000078212\AppData\Roaming\nltk_data...
+[nltk_data]   Package punkt_tab is already up-to-date!
+[nltk_data] Downloading package stopwords to
+[nltk_data]     C:\Users\2000078212\AppData\Roaming\nltk_data...
+[nltk_data]   Package stopwords is already up-to-date!
+2025-05-08 11:52:18,941 - INFO - Reading and processing Excel files
+2025-05-08 11:52:18,941 - INFO - Processing C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Automatable_Use_cases 5 (1).xlsx
+2025-05-08 11:52:19,314 - INFO - Loaded 1425 rows from C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Automatable_Use_cases 5 (1).xlsx
+C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\keywordconnection3.py:62: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  batch['Cleaned_Description'] = batch['Description'].apply(preprocess_text)
+2025-05-08 11:52:19,388 - INFO - Processed batch of 1425 rows from C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Automatable_Use_cases 5 (1).xlsx
+2025-05-08 11:52:19,388 - INFO - Processing C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Non-Automatable_use_cases (1).xlsx
+2025-05-08 11:52:19,486 - INFO - Loaded 4054 rows from C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Non-Automatable_use_cases (1).xlsx
+C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\keywordconnection3.py:62: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  batch['Cleaned_Description'] = batch['Description'].apply(preprocess_text)
+2025-05-08 11:52:19,608 - INFO - Processed batch of 4054 rows from C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Non-Automatable_use_cases (1).xlsx
+2025-05-08 11:52:19,608 - INFO - Reading cleaned texts
+2025-05-08 11:52:19,693 - INFO - Extracting keywords
+2025-05-08 11:52:19,693 - INFO - Extracting unique keywords with TF-IDF
+2025-05-08 11:52:19,703 - INFO - Extracted 1770 unique keywords after filtering
+2025-05-08 11:52:19,705 - INFO - Extracting unique keywords with TF-IDF
+2025-05-08 11:52:19,725 - INFO - Extracted 2711 unique keywords after filtering
+2025-05-08 11:52:19,726 - INFO - Building similarity graph
+C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\keywordconnection3.py:93: UserWarning: [W008] Evaluating Doc.similarity based on empty vectors.
+  similarity = token1.similarity(token2)
+2025-05-08 11:52:23,134 - INFO - Building similarity graph
+2025-05-08 11:52:32,815 - INFO - Refining connections
+2025-05-08 11:52:32,831 - INFO - Iteration 1: Processed 100/1770 nodes
+2025-05-08 11:52:32,831 - INFO - Iteration 1: Processed 200/1770 nodes
+2025-05-08 11:52:32,831 - INFO - Iteration 1: Processed 300/1770 nodes
+2025-05-08 11:52:32,846 - INFO - Iteration 1: Processed 400/1770 nodes
+2025-05-08 11:52:32,846 - INFO - Iteration 1: Processed 500/1770 nodes
+2025-05-08 11:52:32,846 - INFO - Iteration 1: Processed 600/1770 nodes
+2025-05-08 11:52:32,846 - INFO - Iteration 1: Processed 700/1770 nodes
+2025-05-08 11:52:32,846 - INFO - Iteration 1: Processed 800/1770 nodes
+2025-05-08 11:52:32,854 - INFO - Iteration 1: Processed 900/1770 nodes
+2025-05-08 11:52:32,855 - INFO - Iteration 1: Processed 1000/1770 nodes
+2025-05-08 11:52:32,856 - INFO - Iteration 1: Processed 1100/1770 nodes
+2025-05-08 11:52:32,857 - INFO - Iteration 1: Processed 1200/1770 nodes
+2025-05-08 11:52:32,859 - INFO - Iteration 1: Processed 1300/1770 nodes
+2025-05-08 11:52:32,860 - INFO - Iteration 1: Processed 1400/1770 nodes
+2025-05-08 11:52:32,861 - INFO - Iteration 1: Processed 1500/1770 nodes
+2025-05-08 11:52:32,862 - INFO - Iteration 1: Processed 1600/1770 nodes
+2025-05-08 11:52:32,863 - INFO - Iteration 1: Processed 1700/1770 nodes
+2025-05-08 11:52:32,863 - INFO - Iteration 1: Added 116 new edges
+2025-05-08 11:52:32,865 - INFO - Iteration 2: Processed 100/1770 nodes
+2025-05-08 11:52:32,867 - INFO - Iteration 2: Processed 200/1770 nodes
+2025-05-08 11:52:32,869 - INFO - Iteration 2: Processed 300/1770 nodes
+2025-05-08 11:52:32,870 - INFO - Iteration 2: Processed 400/1770 nodes
+2025-05-08 11:52:32,871 - INFO - Iteration 2: Processed 500/1770 nodes
+2025-05-08 11:52:32,871 - INFO - Iteration 2: Processed 600/1770 nodes
+2025-05-08 11:52:32,874 - INFO - Iteration 2: Processed 700/1770 nodes
+2025-05-08 11:52:32,877 - INFO - Iteration 2: Processed 800/1770 nodes
+2025-05-08 11:52:32,878 - INFO - Iteration 2: Processed 900/1770 nodes
+2025-05-08 11:52:32,880 - INFO - Iteration 2: Processed 1000/1770 nodes
+2025-05-08 11:52:32,881 - INFO - Iteration 2: Processed 1100/1770 nodes
+2025-05-08 11:52:32,882 - INFO - Iteration 2: Processed 1200/1770 nodes
+2025-05-08 11:52:32,883 - INFO - Iteration 2: Processed 1300/1770 nodes
+2025-05-08 11:52:32,886 - INFO - Iteration 2: Processed 1400/1770 nodes
+2025-05-08 11:52:32,887 - INFO - Iteration 2: Processed 1500/1770 nodes
+2025-05-08 11:52:32,887 - INFO - Iteration 2: Processed 1600/1770 nodes
+2025-05-08 11:52:32,887 - INFO - Iteration 2: Processed 1700/1770 nodes
+2025-05-08 11:52:32,894 - INFO - Iteration 2: Added 0 new edges
+2025-05-08 11:52:32,895 - INFO - Refining connections
+2025-05-08 11:52:32,913 - INFO - Iteration 1: Processed 100/2711 nodes
+2025-05-08 11:52:32,921 - INFO - Iteration 1: Processed 200/2711 nodes
+2025-05-08 11:52:32,924 - INFO - Iteration 1: Processed 300/2711 nodes
+2025-05-08 11:52:32,924 - INFO - Iteration 1: Processed 400/2711 nodes
+2025-05-08 11:52:32,924 - INFO - Iteration 1: Processed 500/2711 nodes
+2025-05-08 11:52:32,924 - INFO - Iteration 1: Processed 600/2711 nodes
+2025-05-08 11:52:32,932 - INFO - Iteration 1: Processed 700/2711 nodes
+2025-05-08 11:52:32,934 - INFO - Iteration 1: Processed 800/2711 nodes
+2025-05-08 11:52:32,935 - INFO - Iteration 1: Processed 900/2711 nodes
+2025-05-08 11:52:32,937 - INFO - Iteration 1: Processed 1000/2711 nodes
+2025-05-08 11:52:32,937 - INFO - Iteration 1: Processed 1100/2711 nodes
+2025-05-08 11:52:32,942 - INFO - Iteration 1: Processed 1200/2711 nodes
+2025-05-08 11:52:32,943 - INFO - Iteration 1: Processed 1300/2711 nodes
+2025-05-08 11:52:32,944 - INFO - Iteration 1: Processed 1400/2711 nodes
+2025-05-08 11:52:32,946 - INFO - Iteration 1: Processed 1500/2711 nodes
+2025-05-08 11:52:32,947 - INFO - Iteration 1: Processed 1600/2711 nodes
+2025-05-08 11:52:32,947 - INFO - Iteration 1: Processed 1700/2711 nodes
+2025-05-08 11:52:32,947 - INFO - Iteration 1: Processed 1800/2711 nodes
+2025-05-08 11:52:32,947 - INFO - Iteration 1: Processed 1900/2711 nodes
+2025-05-08 11:52:32,947 - INFO - Iteration 1: Processed 2000/2711 nodes
+2025-05-08 11:52:32,947 - INFO - Iteration 1: Processed 2100/2711 nodes
+2025-05-08 11:52:32,952 - INFO - Iteration 1: Processed 2200/2711 nodes
+2025-05-08 11:52:32,954 - INFO - Iteration 1: Processed 2300/2711 nodes
+2025-05-08 11:52:32,955 - INFO - Iteration 1: Processed 2400/2711 nodes
+2025-05-08 11:52:32,956 - INFO - Iteration 1: Processed 2500/2711 nodes
+2025-05-08 11:52:32,957 - INFO - Iteration 1: Processed 2600/2711 nodes
+2025-05-08 11:52:32,958 - INFO - Iteration 1: Processed 2700/2711 nodes
+2025-05-08 11:52:32,959 - INFO - Iteration 1: Added 441 new edges
+2025-05-08 11:52:32,961 - INFO - Iteration 2: Processed 100/2711 nodes
+2025-05-08 11:52:32,964 - INFO - Iteration 2: Processed 200/2711 nodes
+2025-05-08 11:52:32,967 - INFO - Iteration 2: Processed 300/2711 nodes
+2025-05-08 11:52:32,968 - INFO - Iteration 2: Processed 400/2711 nodes
+2025-05-08 11:52:32,971 - INFO - Iteration 2: Processed 500/2711 nodes
+2025-05-08 11:52:32,973 - INFO - Iteration 2: Processed 600/2711 nodes
+2025-05-08 11:52:32,974 - INFO - Iteration 2: Processed 700/2711 nodes
+2025-05-08 11:52:32,976 - INFO - Iteration 2: Processed 800/2711 nodes
+2025-05-08 11:52:32,977 - INFO - Iteration 2: Processed 900/2711 nodes
+2025-05-08 11:52:32,978 - INFO - Iteration 2: Processed 1000/2711 nodes
+2025-05-08 11:52:32,980 - INFO - Iteration 2: Processed 1100/2711 nodes
+2025-05-08 11:52:32,981 - INFO - Iteration 2: Processed 1200/2711 nodes
+2025-05-08 11:52:32,982 - INFO - Iteration 2: Processed 1300/2711 nodes
+2025-05-08 11:52:32,983 - INFO - Iteration 2: Processed 1400/2711 nodes
+2025-05-08 11:52:32,984 - INFO - Iteration 2: Processed 1500/2711 nodes
+2025-05-08 11:52:32,985 - INFO - Iteration 2: Processed 1600/2711 nodes
+2025-05-08 11:52:32,987 - INFO - Iteration 2: Processed 1700/2711 nodes
+2025-05-08 11:52:32,987 - INFO - Iteration 2: Processed 1800/2711 nodes
+2025-05-08 11:52:32,987 - INFO - Iteration 2: Processed 1900/2711 nodes
+2025-05-08 11:52:32,987 - INFO - Iteration 2: Processed 2000/2711 nodes
+2025-05-08 11:52:32,993 - INFO - Iteration 2: Processed 2100/2711 nodes
+2025-05-08 11:52:32,994 - INFO - Iteration 2: Processed 2200/2711 nodes
+2025-05-08 11:52:32,995 - INFO - Iteration 2: Processed 2300/2711 nodes
+2025-05-08 11:52:32,995 - INFO - Iteration 2: Processed 2400/2711 nodes
+2025-05-08 11:52:32,996 - INFO - Iteration 2: Processed 2500/2711 nodes
+2025-05-08 11:52:32,997 - INFO - Iteration 2: Processed 2600/2711 nodes
+2025-05-08 11:52:32,997 - INFO - Iteration 2: Processed 2700/2711 nodes
+2025-05-08 11:52:32,997 - INFO - Iteration 2: Added 840 new edges
