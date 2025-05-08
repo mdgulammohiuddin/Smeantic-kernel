@@ -29,14 +29,14 @@ OUTPUT_FILE = "keyword_network.json"  # Example: r"C:\Data\keyword_network.json"
 BATCH_SIZE = 10000  # Rows per batch
 MIN_SUBGRAPH_SIZE = 3  # Minimum keywords for sufficiency
 MIN_EDGE_WEIGHT = 7  # Minimum edge weight for sufficiency
-SIMILARITY_THRESHOLD = 0.7  # Minimum similarity for edges
-MAX_SEQUENCE_LENGTH = 3  # Maximum length of sequences to consider
+SIMILARITY_THRESHOLD = 0.8  # Increased to reduce graph density
+MAX_SEQUENCE_LENGTH = 3  # Maximum length of sequences
+TFIDF_SCORE_THRESHOLD = 0.1  # Minimum TF-IDF score for keywords
 
 # Step 1: Preprocess text
 stop_words = set(stopwords.words('english'))
 
 def preprocess_text(text):
-    # Handle NaN or non-string inputs
     if pd.isna(text) or not isinstance(text, str):
         return ""
     text = text.lower()
@@ -77,7 +77,9 @@ def extract_unique_keywords(cleaned_texts):
     keyword_scores = tfidf_matrix.sum(axis=0).A1
     keyword_ranking = [(feature_names[i], keyword_scores[i]) for i in range(len(feature_names))]
     keyword_ranking.sort(key=lambda x: x[1], reverse=True)
-    logging.info(f"Extracted {len(keyword_ranking)} unique keywords")
+    # Filter keywords by TF-IDF score
+    keyword_ranking = [(kw, score) for kw, score in keyword_ranking if score >= TFIDF_SCORE_THRESHOLD]
+    logging.info(f"Extracted {len(keyword_ranking)} unique keywords after filtering")
     return [kw for kw, _ in keyword_ranking]
 
 # Step 4: Build keyword connection graph
@@ -94,12 +96,13 @@ def build_similarity_graph(keywords):
     return G
 
 # Step 5: Refine connections iteratively
-def refine_connections(graph, max_iterations=3):
+def refine_connections(graph, max_iterations=2):  # Reduced to 2 iterations
     logging.info("Refining connections")
     G = graph.copy()
     for iteration in range(max_iterations):
         new_edges = []
-        for node in G.nodes():
+        total_nodes = len(G.nodes())
+        for idx, node in enumerate(G.nodes(), 1):
             neighbors = list(G.neighbors(node))
             for i, n1 in enumerate(neighbors):
                 for n2 in neighbors[i+1:]:
@@ -109,6 +112,9 @@ def refine_connections(graph, max_iterations=3):
                         transitive_weight = (weight1 + weight2) / 2
                         if transitive_weight > MIN_EDGE_WEIGHT:
                             new_edges.append((n1, n2, {'weight': transitive_weight}))
+            # Log progress every 100 nodes
+            if idx % 100 == 0:
+                logging.info(f"Iteration {iteration + 1}: Processed {idx}/{total_nodes} nodes")
         G.add_edges_from(new_edges)
         logging.info(f"Iteration {iteration + 1}: Added {len(new_edges)} new edges")
         if not new_edges:
