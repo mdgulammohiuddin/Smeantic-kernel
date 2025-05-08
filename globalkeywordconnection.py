@@ -1,14 +1,16 @@
 import pandas as pd
 import spacy
+import json
 from typing import List, Dict, Any
 
 # Load the spaCy model for NLP
 nlp = spacy.load("en_core_web_sm")
 
-def is_description_sufficient(description: str) -> tuple[bool, List[str]]:
+def is_description_sufficient(description: str) -> tuple[bool, List[Dict[str, str]]]:
     """
     Determine if a description is sufficient using NLP and extract keywords.
-    Sufficiency criteria: length > 20 chars, contains entities or specific terms.
+    Sufficiency criteria: contains at least one entity or more than two noun chunks.
+    Returns a tuple of (sufficient, keywords), where keywords are structured with text and type.
     """
     if not description or not isinstance(description, str) or len(description.strip()) < 20:
         return False, []
@@ -16,20 +18,27 @@ def is_description_sufficient(description: str) -> tuple[bool, List[str]]:
     # Process description with spaCy
     doc = nlp(description)
     
-    # Extract entities (e.g., ORG, GPE, PRODUCT) and tokens
-    entities = [ent.text.lower() for ent in doc.ents if ent.label_ in ["ORG", "GPE", "PRODUCT"]]
-    tokens = [token.text.lower() for token in doc if token.is_alpha and not token.is_stop]
+    # Extract entities (e.g., ORG, GPE, PRODUCT)
+    entities = [{"text": ent.text.lower(), "type": ent.label_} for ent in doc.ents 
+                if ent.label_ in ["ORG", "GPE", "PRODUCT"]]
     
-    # Define sufficiency: must have entities or meaningful tokens
-    if len(entities) > 0 or len(tokens) > 5:
-        # Extract keywords (entities + non-stop words)
-        keywords = list(set(entities + tokens))
-        return True, keywords[:5]  # Limit to 5 keywords for brevity
-    return False, []
+    # Extract noun chunks that do not overlap with entities
+    noun_chunks = [{"text": chunk.text.lower(), "type": "NOUN_CHUNK"} 
+                   for chunk in doc.noun_chunks 
+                   if all(token.ent_type_ == "" for token in chunk)]
+    
+    # Combine entities and noun chunks, preserving order
+    keywords = entities + noun_chunks
+    
+    # Define sufficiency: at least one entity or more than two noun chunks
+    sufficient = len(entities) > 0 or len(noun_chunks) > 2
+    
+    return sufficient, keywords
 
 def process_excel_file(file_path: str) -> List[Dict[str, Any]]:
     """
     Process Excel file to extract 'NO' and 'Description', evaluate sufficiency.
+    Returns a list of dictionaries with 'No', 'sufficient', and 'keywords'.
     """
     try:
         # Read Excel file
@@ -72,9 +81,9 @@ def main():
     file_path = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Automatable_Use_cases 5 (1).xlsx"  # Replace with your Excel file path
     results = process_excel_file(file_path)
     
-    # Print results
-    for result in results:
-        print(f"No: {result['No']}, Sufficient: {result['sufficient']}, Keywords: {result['keywords']}")
+    # Write results to a JSON file
+    with open("output.json", "w") as f:
+        json.dump(results, f, indent=4)
 
 if __name__ == "__main__":
     main()
