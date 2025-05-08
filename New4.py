@@ -10,9 +10,16 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import logging
 from pathlib import Path
 import tempfile
+import random
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Setup logging to file
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('keyword_network.log', mode='w')
+    ]
+)
 
 # Download NLTK resources
 nltk.download('punkt_tab')
@@ -23,15 +30,18 @@ nlp = spacy.load("en_core_web_md", disable=["parser", "ner"])
 
 # Configuration
 # Update these paths to your Excel files and JSON output location
-AUTOMATABLE_FILE = "automatable_use_cases.xlsx"  # Example: r"C:\Data\automatable_use_cases.xlsx" or "/home/user/data/automatable_use_cases.xlsx"
-NON_AUTOMATABLE_FILE = "non_automatable_use_cases.xlsx"  # Example: r"C:\Data\non_automatable_use_cases.xlsx" or "/home/user/data/non_automatable_use_cases.xlsx"
-OUTPUT_FILE = "keyword_network.json"  # Example: r"C:\Data\keyword_network.json" or "/home/user/data/keyword_network.json"
+AUTOMATABLE_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Automatable_Use_cases 5 (1).xlsx"
+NON_AUTOMATABLE_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\Non-Automatable_use_cases (1).xlsx"
+OUTPUT_FILE = r"C:\Users\2000078212\OneDrive - Hexaware Technologies\Desktop\ito_copilot_keywords\keyword_network.json"
 BATCH_SIZE = 10000  # Rows per batch
 MIN_SUBGRAPH_SIZE = 3  # Minimum keywords for sufficiency
 MIN_EDGE_WEIGHT = 7  # Minimum edge weight for sufficiency
-SIMILARITY_THRESHOLD = 0.8  # Increased to reduce graph density
+SIMILARITY_THRESHOLD = 0.9  # Increased to reduce initial edges
 MAX_SEQUENCE_LENGTH = 3  # Maximum length of sequences
-TFIDF_SCORE_THRESHOLD = 0.1  # Minimum TF-IDF score for keywords
+TFIDF_SCORE_THRESHOLD = 0.2  # Filter keywords
+MAX_NEW_EDGES = 10000  # Maximum new edges per iteration
+MAX_SEQUENCES = 500  # Reduced maximum sequences
+MAX_NODES_FOR_SEQUENCES = 500  # Sample nodes for sequences
 
 # Step 1: Preprocess text
 stop_words = set(stopwords.words('english'))
@@ -58,8 +68,8 @@ def process_excel_file(file_path, temp_file, batch_size=BATCH_SIZE):
     first_batch = True
     for start in range(0, len(df), batch_size):
         end = min(start + batch_size, len(df))
-        batch = df.iloc[start:end]
-        batch['Cleaned_Description'] = batch['Description'].apply(preprocess_text)
+        batch = df.iloc[start:end].copy()  # Create a copy to avoid SettingWithCopyWarning
+        batch.loc[:, 'Cleaned_Description'] = batch['Description'].apply(preprocess_text)
         mode = 'w' if first_batch else 'a'
         header = first_batch
         batch[['Cleaned_Description']].to_csv(temp_file, mode=mode, header=header, index=False)
@@ -77,7 +87,6 @@ def extract_unique_keywords(cleaned_texts):
     keyword_scores = tfidf_matrix.sum(axis=0).A1
     keyword_ranking = [(feature_names[i], keyword_scores[i]) for i in range(len(feature_names))]
     keyword_ranking.sort(key=lambda x: x[1], reverse=True)
-    # Filter keywords by TF-IDF score
     keyword_ranking = [(kw, score) for kw, score in keyword_ranking if score >= TFIDF_SCORE_THRESHOLD]
     logging.info(f"Extracted {len(keyword_ranking)} unique keywords after filtering")
     return [kw for kw, _ in keyword_ranking]
@@ -85,18 +94,28 @@ def extract_unique_keywords(cleaned_texts):
 # Step 4: Build keyword connection graph
 def build_similarity_graph(keywords):
     G = nx.Graph()
-    G.add_nodes_from(keywords)
-    logging.info("Building similarity graph")
-    keyword_tokens = list(nlp.pipe(keywords))
+    valid_keywords = []
+    keyword_tokens = []
+    # Filter keywords with valid embeddings
+    for kw in keywords:
+        token = nlp(kw)
+        if token.has_vector and not token.vector_norm == 0:
+            valid_keywords.append(kw)
+            keyword_tokens.append(token)
+    G.add_nodes_from(valid_keywords)
+    logging.info(f"Building similarity graph with {len(valid_keywords)} valid keywords")
     for i, token1 in enumerate(keyword_tokens):
         for j, token2 in enumerate(keyword_tokens[i+1:], start=i+1):
-            similarity = token1.similarity(token2)
-            if similarity > SIMILARITY_THRESHOLD:
-                G.add_edge(keywords[i], keywords[j], weight=similarity * 10)
+            try:
+                similarity = token1.similarity(token2)
+                if similarity > SIMILARITY_THRESHOLD:
+                    G.add_edge(valid_keywords[i], valid_keywords[j], weight=similarity * 10)
+            except:
+                continue
     return G
 
 # Step 5: Refine connections iteratively
-def refine_connections(graph, max_iterations=2):  # Reduced to 2 iterations
+def refine_connections(graph, max_iterations=2):
     logging.info("Refining connections")
     G = graph.copy()
     for iteration in range(max_iterations):
@@ -112,9 +131,17 @@ def refine_connections(graph, max_iterations=2):  # Reduced to 2 iterations
                         transitive_weight = (weight1 + weight2) / 2
                         if transitive_weight > MIN_EDGE_WEIGHT:
                             new_edges.append((n1, n2, {'weight': transitive_weight}))
-            # Log progress every 100 nodes
+                            if len(new_edges) >= MAX_NEW_EDGES:
+                                logging.info(f"Iteration {iteration + 1}: Stopping early due to {len(new_edges)} new edges")
+                                break
+                    if len(new_edges) >= MAX_NEW_EDGES:
+                        break
+                if len(new_edges) >= MAX_NEW_EDGES:
+                    break
             if idx % 100 == 0:
                 logging.info(f"Iteration {iteration + 1}: Processed {idx}/{total_nodes} nodes")
+            if len(new_edges) >= MAX_NEW_EDGES:
+                break
         G.add_edges_from(new_edges)
         logging.info(f"Iteration {iteration + 1}: Added {len(new_edges)} new edges")
         if not new_edges:
@@ -139,14 +166,24 @@ def get_connected_keywords(keyword, graph):
 # Step 8: Find sequences (paths in the graph)
 def find_sequences(graph, max_length=MAX_SEQUENCE_LENGTH):
     sequences = []
-    for node in graph.nodes():
+    sequence_count = 0
+    # Sample a subset of nodes to reduce computation
+    nodes = list(graph.nodes())
+    if len(nodes) > MAX_NODES_FOR_SEQUENCES:
+        nodes = random.sample(nodes, MAX_NODES_FOR_SEQUENCES)
+    logging.info(f"Generating sequences for {len(nodes)} sampled nodes")
+    for node in nodes:
         for length in range(2, max_length + 1):
-            for target in graph.nodes():
+            for target in nodes:
                 if node != target:
                     paths = list(nx.all_simple_paths(graph, node, target, cutoff=length))
                     for path in paths:
                         if len(path) >= 2:
                             sequences.append(path)
+                            sequence_count += 1
+                            if sequence_count >= MAX_SEQUENCES:
+                                logging.info(f"Stopping sequence generation at {sequence_count} sequences")
+                                return sequences
     return sequences
 
 # Step 9: Get nested sequences
