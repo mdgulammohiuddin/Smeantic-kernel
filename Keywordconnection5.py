@@ -48,7 +48,7 @@ def analyze_description(description):
     # Prepare documents for TF-IDF
     all_docs = sufficient_docs + insufficient_docs + [desc_str]
     if not desc_str.strip() or (not sufficient_docs and not insufficient_docs):
-        return "not sufficient", 0.0
+        return "not sufficient", 0.0, desc_str
 
     # Vectorize
     vectorizer = TfidfVectorizer(stop_words='english')
@@ -72,21 +72,30 @@ def analyze_description(description):
     percentage = round(final_score * 100, 2)
     sufficiency_label = "sufficient" if is_sufficient else "not sufficient"
     
-    return sufficiency_label, percentage
+    return sufficiency_label, percentage, desc_str
 
 # Load Excel file
 df = pd.read_excel('data.xlsx')
 
-# Process each row
-for index, row in df.iterrows():
-    short_desc = row["Short description"]
-    desc = row["Description"]
+# Open a log file to write results
+with open('analysis_log.txt', 'w', encoding='utf-8') as log_file:
+    # Write header
+    log_file.write("Analysis Results\n")
+    log_file.write("=" * 50 + "\n\n")
     
-    # Analyze both columns
-    short_suff, short_pct = analyze_description(short_desc)
-    desc_suff, desc_pct = analyze_description(desc)
-    
-    # Output results
-    print(f"Row {index}:")
-    print(f"  Short description: {short_suff}, {short_pct}%")
-    print(f"  Description: {desc_suff}, {desc_pct}%")
+    # Process each row
+    for index, row in df.iterrows():
+        short_desc = row["Short description"]
+        desc = row["Description"]
+        
+        # Analyze both columns
+        short_suff, short_pct, short_text = analyze_description(short_desc)
+        desc_suff, desc_pct, desc_text = analyze_description(desc)
+        
+        # Write results to file
+        log_file.write(f"Row {index}:\n")
+        log_file.write(f"  Short description: {short_text}\n")
+        log_file.write(f"    Sufficiency: {short_suff}, Percentage: {short_pct}%\n")
+        log_file.write(f"  Description: {desc_text}\n")
+        log_file.write(f"    Sufficiency: {desc_suff}, Percentage: {desc_pct}%\n")
+        log_file.write("-" * 50 + "\n\n")
