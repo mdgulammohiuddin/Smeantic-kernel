@@ -30,20 +30,20 @@ def analyze_description(description):
     desc_lower = desc_str.lower()
 
     # Regex matching for sequences
-    suff_seq_matches = sum(1 for pattern in sufficient_patterns if re.search(pattern, desc_lower))
-    insuff_seq_matches = sum(1 for pattern in insufficient_patterns if re.search(pattern, desc_lower))
+    suff_seq_matches = sum(1 for pattern in sufficient_patterns if re.search(pattern, desc_lower, re.IGNORECASE))
+    insuff_seq_matches = sum(1 for pattern in insufficient_patterns if re.search(pattern, desc_lower, re.IGNORECASE))
 
-    # Keyword matching
-    suff_kw_matches = sum(1 for kw in sufficient_keywords if kw.lower() in desc_lower)
-    insuff_kw_matches = sum(1 for kw in insufficient_keywords if kw.lower() in desc_lower)
+    # Keyword matching (ensure keywords are strings)
+    suff_kw_matches = sum(1 for kw in sufficient_keywords if isinstance(kw, str) and kw.lower() in desc_lower)
+    insuff_kw_matches = sum(1 for kw in insufficient_keywords if isinstance(kw, str) and kw.lower() in desc_lower)
 
     # Total matches
     total_suff_matches = suff_seq_matches + suff_kw_matches
     total_insuff_matches = insuff_seq_matches + insuff_kw_matches
 
-    # NLP similarity using TF-IDF and cosine similarity
-    sufficient_docs = sufficient_sequences + sufficient_keywords
-    insufficient_docs = insufficient_sequences + insufficient_keywords
+    # Prepare documents for NLP (convert sequences to strings)
+    sufficient_docs = [kw for kw in sufficient_keywords if isinstance(kw, str)] + [' '.join(seq) for seq in sufficient_sequences]
+    insufficient_docs = [kw for kw in insufficient_keywords if isinstance(kw, str)] + [' '.join(seq) for seq in insufficient_sequences]
     
     # Prepare documents for TF-IDF
     all_docs = sufficient_docs + insufficient_docs + [desc_str]
@@ -51,7 +51,7 @@ def analyze_description(description):
         return "not sufficient", 0.0
 
     # Vectorize
-    vectorizer = TfidfVectorizer()
+    vectorizer = TfidfVectorizer(stop_words='english')
     tfidf_matrix = vectorizer.fit_transform(all_docs)
     
     # Split vectors
