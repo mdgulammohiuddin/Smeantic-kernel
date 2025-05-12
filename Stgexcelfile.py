@@ -53,7 +53,7 @@ def analyze_description(description):
 
     # Check for empty or invalid input
     if not desc_str.strip() or (not sufficient_docs and not insufficient_docs):
-        return "not sufficient", 0.0
+        return "insufficient", 0.0
 
     # Vectorize
     vectorizer = TfidfVectorizer(stop_words='english')
@@ -72,12 +72,12 @@ def analyze_description(description):
     final_score = min(base_score + boost, 1.0)
     is_sufficient = (final_score > 0.5) or (total_suff_matches > total_insuff_matches and final_score > 0)
     percentage = round(final_score * 100, 2)
-    sufficiency_label = "sufficient" if is_sufficient else "not sufficient"
+    sufficiency_label = "sufficient" if is_sufficient else "insufficient"
 
     return sufficiency_label, percentage
 
 # Load CSV file
-df = pd.read_csv('data.csv')
+df = pd.read_csv('STG Jan 2024 - Mar 2024 final report - Copy(Sheet2).csv')
 
 # Initialize lists to store results
 sufficiency_labels = []
@@ -85,7 +85,7 @@ percentages = []
 
 # Process each row
 for index, row in df.iterrows():
-    short_desc = row["short description"]
+    short_desc = row["Short description"]
     sufficiency_label, percentage = analyze_description(short_desc)
     sufficiency_labels.append(sufficiency_label)
     percentages.append(percentage)
@@ -95,4 +95,4 @@ df['regex matching'] = sufficiency_labels
 df['percentage of sufficiency'] = percentages
 
 # Save to Excel
-df.to_excel('output_results.xlsx', index=False)
+df.to_excel('output_results4.xlsx', index=False)
