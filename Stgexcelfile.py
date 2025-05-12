@@ -6,8 +6,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 # Load JSON data
-with open('keyword_network2.json', 'r') as f:
-    data = json.load(f)
+try:
+    with open('keyword_network2.json', 'r', encoding='utf-8') as f:
+        data = json.load(f)
+except UnicodeDecodeError:
+    print("Error: 'keyword_network2.json' has encoding issues. Trying 'cp1252' encoding...")
+    with open('keyword_network2.json', 'r', encoding='cp1252') as f:
+        data = json.load(f)
 
 # Extract keywords and sequences
 keywords = data[0]["Keywords"]
@@ -76,8 +81,12 @@ def analyze_description(description):
 
     return sufficiency_label, percentage
 
-# Load CSV file
-df = pd.read_csv('STG Jan 2024 - Mar 2024 final report - Copy(Sheet2).csv')
+# Load CSV file with appropriate encoding
+try:
+    df = pd.read_csv('STG Jan 2024 - Mar 2024 final report - Copy(Sheet2).csv', encoding='cp1252')
+except UnicodeDecodeError:
+    print("Error: 'cp1252' encoding failed. Trying 'latin1' encoding...")
+    df = pd.read_csv('STG Jan 2024 - Mar 2024 final report - Copy(Sheet2).csv', encoding='latin1')
 
 # Initialize lists to store results
 sufficiency_labels = []
