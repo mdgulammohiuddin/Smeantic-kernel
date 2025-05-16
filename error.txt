@@ -1,14 +1,40 @@
-RuntimeWarning: Airflow currently can be run on POSIX-compliant Operating Systems. For development, it is regularly tested on fairly modern Linux Distros and recent versions of macOS. On Windows you can run it via WSL2 (Windows Subsystem for Linux 2) or via Linux Containers. The work to add Windows support is tracked via https://github.com/apache/airflow/issues/10388, but it is not a high priority.
-  warnings.warn(
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "C:\Users\2000078212\AppData\Roaming\Python\Python312\Scripts\airflow.exe\__main__.py", line 4, in <module>
-  File "C:\Users\2000078212\AppData\Roaming\Python\Python312\site-packages\airflow\__init__.py", line 79, in <module>
-    settings.initialize()
-  File "C:\Users\2000078212\AppData\Roaming\Python\Python312\site-packages\airflow\settings.py", line 623, in initialize
-    configure_orm()
-  File "C:\Users\2000078212\AppData\Roaming\Python\Python312\site-packages\airflow\settings.py", line 395, in configure_orm
-    os.register_at_fork(after_in_child=clean_in_fork)
-    ^^^^^^^^^^^^^^^^^^^
-AttributeError: module 'os' has no attribute 'register_at_fork'
+              0           0
+dag-processor | example_dags  example_dynamic_task_mapping.py                                                                 0           0
+dag-processor | example_dags  tutorial_objectstorage.py                                                                       0           0
+dag-processor | example_dags  example_asset_alias_with_no_taskflow.py                                                         0           0
+dag-processor | example_dags  example_inlet_event_extra.py                                                                    0           0
+dag-processor | example_dags  example_setup_teardown_taskflow.py                                                              0           0
+dag-processor | example_dags  example_time_delta_sensor_async.py                                                              0           0
+dag-processor | example_dags  plugins/event_listener.py                                                                       0           0
+dag-processor | example_dags  example_local_kubernetes_executor.py                                                            0           0
+dag-processor | example_dags  tutorial_taskflow_templates.py                                                                  0           0
+dag-processor | example_dags  example_setup_teardown.py                                                                       0           0
+dag-processor | example_dags  example_assets.py                                                                               0           0
+dag-processor | example_dags  example_branch_labels.py                                                                        0           0
+dag-processor | example_dags  example_task_group_decorator.py                                                                 0           0
+dag-processor | example_dags  example_custom_weight.py                                                                        0           0
+dag-processor | example_dags  tutorial_taskflow_api_virtualenv.py                                                             0           0
+dag-processor | example_dags  example_xcom.py                                                                                 0           0
+dag-processor | example_dags  plugins/listener_plugin.py                                                                      0           0
+dag-processor | example_dags  example_simplest_dag.py                                                                         0           0
+dag-processor | example_dags  example_task_group.py                                                                           0           0
+dag-processor | example_dags  tutorial_taskflow_api.py                                                                        0           0
+dag-processor | example_dags  example_trigger_target_dag.py                                                                   0           0
+dag-processor | example_dags  example_display_name.py                                                                         0           0
+dag-processor | example_dags  example_xcomargs.py                                                                             0           0
+dag-processor | ================================================================================
+scheduler  | [2025-05-16 09:55:33 +0000] [2648120] [ERROR] Connection in use: ('::', 8793)
+scheduler  | [2025-05-16 09:55:33 +0000] [2648120] [ERROR] connection to ('::', 8793) failed: [Errno 98] Address already in use
+dag-processor | [2025-05-16T09:55:34.357+0000] {dag.py:1895} INFO - Sync 1 DAGs
+dag-processor | [2025-05-16T09:55:34.400+0000] {dag.py:2509} INFO - Setting next_dagrun for tutorial_taskflow_templates to 2025-05-16 00:00:00+00:00, run_after=2025-05-16 00:00:00+00:00
+dag-processor | [2025-05-16T09:55:34.503+0000] {dag.py:1895} INFO - Sync 1 DAGs
+dag-processor | [2025-05-16T09:55:34.513+0000] {dag.py:2509} INFO - Setting next_dagrun for tutorial_taskflow_api_virtualenv to None, run_after=None
+dag-processor | [2025-05-16T09:55:34.597+0000] {dag.py:1895} INFO - Sync 1 DAGs
+dag-processor | [2025-05-16T09:55:34.609+0000] {dag.py:2509} INFO - Setting next_dagrun for tutorial_dag to None, run_after=None
+dag-processor | [2025-05-16T09:55:34.698+0000] {dag.py:1895} INFO - Sync 1 DAGs
+dag-processor | [2025-05-16T09:55:34.708+0000] {dag.py:2509} INFO - Setting next_dagrun for tutorial_objectstorage to None, run_after=None
+dag-processor | [2025-05-16T09:55:34.789+0000] {dag.py:1895} INFO - Sync 1 DAGs
+dag-processor | [2025-05-16T09:55:34.800+0000] {dag.py:2509} INFO - Setting next_dagrun for tutorial_taskflow_api to None, run_after=None
+dag-processor | [2025-05-16T09:55:34.882+0000] {dag.py:1895} INFO - Sync 1 DAGs
+scheduler  | [2025-05-16 09:55:34 +0000] [2648120] [ERROR] Connection in use: ('::', 8793)
+scheduler  | [2025-05-16 09:55:34 +0000] [2648120] [ERROR] connection to ('::', 8793) failed: [Errno 98] Address already in use
