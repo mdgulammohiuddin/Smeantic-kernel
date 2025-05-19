@@ -1,6 +1,44 @@
-Broken DAG: [/app/fdi/dags/dag_check.py] Traceback (most recent call last):
-  File "/app/fdi/dags/dag_check.py", line 25, in <module>
-    python_task = PythonOperator(
-  File "/app/airflow_310_env/lib/python3.10/site-packages/airflow/models/baseoperator.py", line 420, in apply_defaults
-    raise AirflowException(f"missing keyword argument {missing_args.pop()!r}")
-airflow.exceptions.AirflowException: missing keyword argument 'python_callable'
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=sentiment_classification/run_id=manual__2025-05-19T09:24:47.247315+00:00/task_id=process_with_llm/attempt=1.log"]
+[2025-05-19, 14:54:48] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-19, 14:54:48] INFO - Filling up the DagBag from /app/fdi/dags/test_dag.py: source="airflow.models.dagbag.DagBag"
+[2025-05-19, 14:54:48] WARNING - python-dotenv could not parse statement starting at line 1: source="dotenv.main"
+[2025-05-19, 14:54:48] WARNING - python-dotenv could not parse statement starting at line 2: source="dotenv.main"
+[2025-05-19, 14:54:48] WARNING - python-dotenv could not parse statement starting at line 4: source="dotenv.main"
+[2025-05-19, 14:54:48] INFO - Done. Returned value was: I'm very happy with the product.: source="airflow.task.operators.airflow_ai_sdk.operators.llm.LLMDecoratedOperator"
+[2025-05-19, 14:54:48] ERROR - Task failed with exception: source="task"
+UserError: `model` must either be set on the agent or included when calling it.
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/agent.py", line 52 in execute
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/agent.py", line 48 in execute
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/agent.py", line 578 in run_sync
+
+File "/usr/lib/python3.12/asyncio/base_events.py", line 687 in run_until_complete
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/agent.py", line 319 in run
+
+File "/usr/lib/python3.12/contextlib.py", line 210 in __aenter__
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/agent.py", line 425 in iter
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/agent.py", line 1215 in _get_model
+
+[2025-05-19, 14:54:48] INFO - None: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - None: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Current task name:process_with_llm: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Dag name:sentiment_classification: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Executing LLM call: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Prompt: I'm very happy with the product.: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Error: `model` must either be set on the agent or included when calling it.: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Task instance in failure state: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Task start: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Task:<Task(LLMDecoratedOperator): process_with_llm>: chan="stdout": source="task"
+[2025-05-19, 14:54:48] INFO - Failure caused by `model` must either be set on the agent or included when calling it.: chan="stdout": source="task"
