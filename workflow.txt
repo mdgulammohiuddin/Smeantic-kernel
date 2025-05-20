@@ -1,0 +1,59 @@
+Workflow Stages and Agent Involvement
+1. Input Collection and Preprocessing
+Objective: Gather static and dynamic inputs required for FRD generation and preprocess them.
+Agents Involved:
+Sharepoint Agent (System Agent): Reads static files such as the rules file and FRD template from SharePoint.
+S3 Agent (System Agent): Fetches dynamic inputs like call transcripts, emails, and other files from S3 storage.
+Config Agent (System Agent): Parses the rules file and FRD template to create a structured framework.
+Parallelization:
+Sharepoint Agent and S3 Agent work simultaneously to fetch inputs.
+Config Agent processes the rules and template in parallel.
+Output:
+Preprocessed rules, FRD template, and cleaned dynamic inputs.
+2. Content Extraction
+Objective: Extract relevant content from various input sources based on rules and the FRD template.
+Agents Involved:
+FRD Agent (Process Agent): Extracts FRD content using rules and the template.
+Text Data Cleaning Agent (Process Agent): Cleans and preprocesses textual data (e.g., call transcripts, emails).
+Image Processing Agent (Process Agent): Extracts text from images using OCR (Optical Character Recognition).
+File Parsing Agent (Process Agent): Extracts data from structured files like CSV, Excel, PPT, and PDFs.
+Parallelization:
+Text Data Cleaning Agent, Image Processing Agent, and File Parsing Agent operate concurrently to handle different types of inputs.
+FRD Agent consolidates extracted content from all sources.
+Output:
+Structured and cleaned content ready for integration into the FRD draft.
+3. FRD Draft Generation
+Objective: Combine all extracted content into the FRD template to create the initial draft.
+Agents Involved:
+Compose Agent (System Agent): Integrates structured content into the FRD template.
+Input:
+Structured content from the FRD Agent.
+Parsed template structure from the Config Agent.
+Output:
+Initial FRD draft.
+4. Human-in-the-Loop Editing
+Objective: Enable human reviewers to refine and edit the initial FRD draft.
+Agents Involved:
+Human-in-the-Loop Agent (System Agent): Facilitates human review and editing.
+Input:
+Initial FRD draft.
+Output:
+Human-edited FRD draft.
+5. Version Control and Updates
+Objective: Track changes to the FRD and update it with new dynamic inputs.
+Agents Involved:
+Version Control Agent (System Agent): Maintains version history of the FRD.
+Dynamic Input Integration Agent (Process Agent): Monitors new inputs (e.g., additional meetings, emails) and updates the FRD accordingly.
+Input:
+Human-edited FRD draft.
+New dynamic inputs.
+Output:
+Updated FRD draft with version history.
+6. Finalization and Distribution
+Objective: Finalize the FRD and distribute it to stakeholders.
+Agents Involved:
+Email Agent (System Agent): Sends the finalized FRD document to stakeholders.
+Input:
+Finalized FRD document.
+Output:
+Email with FRD attached.
