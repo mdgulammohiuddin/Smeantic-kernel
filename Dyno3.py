@@ -11,6 +11,7 @@ from pdf2image import convert_from_path
 from pptx import Presentation
 from openpyxl import load_workbook
 import json
+import ast
 # Load environment variables
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -44,8 +45,9 @@ SYSTEM_PROMPT = """
 You are a document classifier. Based on the input path (file path or URL), classify which agents should process the document.
 
 - For '.pdf', '.pptx', '.xlsx': always classify as 'File Parsing Agent'
-- For those same files, if detect_images_in_document returns true or it's a SharePoint URL, also classify as 'Image Processing Agent'
-- For '.eml', '.msg': classify as 'Email Agent'
+- For those same files('.pdf', '.pptx', '.xlsx'), if detect_images_in_document returns true, also classify as 'Image Processing Agent'
+- For '.eml', '.msg': classify as 'Email Agent',
+- For those same files('.eml', '.msg'), if detect_images_in_document returns true, also classify as 'Image Processing Agent'
 - For '.vtt', '.txt': classify as 'Transcript Agent'
 - For image extensions ('.jpg', '.png', '.gif'): classify as 'Image Processing Agent'
 - For unknown or no extension: default to 'File Parsing Agent'
@@ -75,9 +77,19 @@ def doc_classifier_dag():
     def classify(input_path: str) -> List[Dict[str, Any]]:
         logger.info(f"Running classifier for: {input_path}")
         result = document_classifier_agent.run_sync(input_path)
-
+        output_data = result.data
         
-        data = json.loads(result.data) if isinstance(result.data, str) else result.data
+        if isinstance(output_data, str):
+            try:
+                data = json.loads(output_data)
+            except json.JSONDecodeError:
+                try:
+                    data = ast.literal_eval(output_data)
+                except Exception:
+                    logger.error(f"Failed to parse agent output: {output_data}")
+                    raise
+        else:
+            data = output_data
 
         logger.info(f"Agent output: {data}")
         return data
