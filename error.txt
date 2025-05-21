@@ -1,19 +1,19 @@
-Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-21T18:21:31.001293+00:00/task_id=classify/map_index=0/attempt=1.log"]
-::group::Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-21T18:21:31.001293+00:00/task_id=classify/map_index=0/attempt=1.log"]
-[2025-05-21, 23:51:32] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
-[2025-05-21, 23:51:32] INFO - Filling up the DagBag from /app/fdi/dags/dyno3.py: source="airflow.models.dagbag.DagBag"
-[2025-05-21, 23:51:32] INFO - Running classifier for: /app/fdi/Documents/FRD.pptx: source="airflow.utils.log.logging_mixin.LoggingMixin"
-[2025-05-21, 23:51:33] INFO - Task instance is in running state: chan="stdout": source="task"
-[2025-05-21, 23:51:33] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
-[2025-05-21, 23:51:33] INFO - Current task name:classify: chan="stdout": source="task"
-[2025-05-21, 23:51:33] INFO - Dag name:document_classifier_dag: chan="stdout": source="task"
-[2025-05-21, 23:51:33] INFO - Executing LLM call: chan="stdout": source="task"
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-21T18:26:42.124251+00:00/task_id=classify/map_index=0/attempt=1.log"]
+[2025-05-21, 23:56:42] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-21, 23:56:42] INFO - Filling up the DagBag from /app/fdi/dags/dyno3.py: source="airflow.models.dagbag.DagBag"
+[2025-05-21, 23:56:43] INFO - Running classifier for: /app/fdi/Documents/FRD.pptx: source="airflow.utils.log.logging_mixin.LoggingMixin"
+[2025-05-21, 23:56:43] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-21, 23:56:43] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-21, 23:56:43] INFO - Current task name:classify: chan="stdout": source="task"
+[2025-05-21, 23:56:43] INFO - Dag name:document_classifier_dag: chan="stdout": source="task"
+[2025-05-21, 23:56:43] INFO - Executing LLM call: chan="stdout": source="task"
 Calling tool detect_images_in_document with args {"path":"/app/fdi/Documents/FRD.pptx"}: chan="stdout": source="task"
-[2025-05-21, 23:51:34] INFO - Done. Returned value was: AgentRunResult(data='[{"agent": "File Parsing Agent", "path": "/app/fdi/Documents/FRD.pptx"}]'): source="airflow.task.operators.airflow_ai_sdk.operators.agent.AgentDecoratedOperator"
-[2025-05-21, 23:51:34] INFO - Prompt: AgentRunResult(data='[{"agent": "File Parsing Agent", "path": "/app/fdi/Documents/FRD.pptx"}]'): chan="stdout": source="task"
-[2025-05-21, 23:51:34] INFO - Error: 'AgentRunResult' object is not iterable: chan="stdout": source="task"
-[2025-05-21, 23:51:34] ERROR - Task failed with exception: source="task"
-TypeError: 'AgentRunResult' object is not iterable
+[2025-05-21, 23:56:44] INFO - Agent output: [{'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}]: source="airflow.utils.log.logging_mixin.LoggingMixin"
+[2025-05-21, 23:56:44] INFO - Done. Returned value was: [{'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}]: source="airflow.task.operators.airflow_ai_sdk.operators.agent.AgentDecoratedOperator"
+[2025-05-21, 23:56:44] INFO - Prompt: [{'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}]: chan="stdout": source="task"
+[2025-05-21, 23:56:44] INFO - Error: Expected code to be unreachable, but got: {'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}: chan="stdout": source="task"
+[2025-05-21, 23:56:44] ERROR - Task failed with exception: source="task"
+AssertionError: Expected code to be unreachable, but got: {'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
@@ -48,9 +48,11 @@ File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.p
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 382 in _map_user_message
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 408 in _map_user_prompt
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 452 in _map_user_prompt
 
-[2025-05-21, 23:51:34] INFO - Task instance in failure state: chan="stdout": source="task"
-[2025-05-21, 23:51:34] INFO - Task start: chan="stdout": source="task"
-[2025-05-21, 23:51:34] INFO - Task:<Task(AgentDecoratedOperator): classify>: chan="stdout": source="task"
-[2025-05-21, 23:51:34] INFO - Failure caused by 'AgentRunResult' object is not iterable: chan="stdout": source="task"
+File "/usr/lib/python3.12/typing.py", line 2409 in assert_never
+
+[2025-05-21, 23:56:44] INFO - Task instance in failure state: chan="stdout": source="task"
+[2025-05-21, 23:56:44] INFO - Task start: chan="stdout": source="task"
+[2025-05-21, 23:56:44] INFO - Task:<Task(AgentDecoratedOperator): classify>: chan="stdout": source="task"
+[2025-05-21, 23:56:44] INFO - Failure caused by Expected code to be unreachable, but got: {'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}: chan="stdout": source="task"
