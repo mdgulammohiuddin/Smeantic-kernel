@@ -8,7 +8,9 @@ from dotenv import load_dotenv
 import logging
 
 # Configure logging
-logging.basicConfig(filename="document_router.log", level=logging.INFO)
+logging.basicConfig(filename="document_router.log", level=logging.DEBUG)
+logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
+logging.getLogger('openai').setLevel(logging.DEBUG)
 
 # Load .env file and set OpenAI API key
 load_dotenv()
@@ -31,23 +33,26 @@ You are a document classifier. Your task is to classify input paths into differe
 - If the input starts with 'http' or 'https', classify it as 'SharePoint Agent'.
 - Else, if it's a local file path, classify based on its extension:
   - If it ends with '.pdf', '.docx', '.ppt', '.pptx', '.xlsx', classify as 'File Parsing Agent'.
-  - If it ends with '.eml', classify as 'Email Agent'.
-  - If it ends with '.vtt', '.txt', classify as 'Transcript Agent'.
-  - If it ends with '.jpg', '.png', '.gif', classify as 'Image Processing Agent'.
+  - If it ends with '.pdf', '.pptx', '.xlsx', also classify as 'Image Processing Agent' (these files may contain images).
+  - If it ends with '.eml' or '.msg', classify as 'Email Agent'.
+  - If it ends with '.vtt' or '.txt', classify as 'Transcript Agent'.
+  - If it ends with '.jpg', '.png', or '.gif', classify as 'Image Processing Agent'.
   - For any other extension, classify as 'File Parsing Agent'.
 
-Return a JSON object with 'agent' and 'path' fields, e.g., {'agent': 'File Parsing Agent', 'path': '/path/to/file.pdf'}
+For inputs that match multiple criteria (e.g., '.pptx' for both 'File Parsing Agent' and 'Image Processing Agent'), return multiple JSON objects, one for each agent.
+
+Return a list of JSON objects, each with 'agent' and 'path' fields, e.g., [{'agent': 'File Parsing Agent', 'path': '/path/to/file.pptx'}, {'agent': 'Image Processing Agent', 'path': '/path/to/file.pptx'}]
 """
 
 # Task to classify documents using @task.agent without tools
-@task.agent(model="gpt-4", result_type=Assignment, system_prompt=system_prompt)
-def classify_document(input_path: str) -> Assignment:
+@task.agent(model="gpt-4o", result_type=List[Assignment], system_prompt=system_prompt)
+def classify_document(input_path: str) -> List[Assignment]:
     """
-    Classify a document or URL to an agent based on the system prompt.
+    Classify a document or URL to one or more agents based on the system prompt.
     Args:
         input_path: Path to a local file or a SharePoint URL.
     Returns:
-        Assignment object with agent name and path/URL.
+        List of Assignment objects with agent name and path/URL.
     """
     pass
 
@@ -57,12 +62,14 @@ with DAG(
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
+    tags=['document_classification', 'airflow-ai-sdk', 'pydantic-ai'],
 ):
     # Example inputs (local files and SharePoint URLs)
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
         "https://hexawareonline.sharepoint.com/teams/tensaiGPT-PROD-HR-Docs/_api/web/GetFileByServerRelativeUrl('/teams/tensaiGPT-PROD-HR-Docs/Shared%20Documents/document1.pdf')",
         "/path/to/example.eml",
+        "/path/to/message.msg",
         "/path/to/transcript.vtt",
         "/path/to/image.jpg",
         "/path/to/unknown.xyz"
