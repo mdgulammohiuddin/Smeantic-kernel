@@ -10,8 +10,6 @@ from airflow.utils.log.logging_mixin import LoggingMixin
 from pdf2image import convert_from_path
 from pptx import Presentation
 from openpyxl import load_workbook
-import json
-import ast
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +21,7 @@ os.environ["OPENAI_API_KEY"] = api_key
 # Logger
 logger = LoggingMixin().log
 
-# Tool function
+# Helper function
 def detect_images_in_document(path: str) -> bool:
     try:
         ext = os.path.splitext(path)[1].lower()
@@ -41,7 +39,7 @@ def detect_images_in_document(path: str) -> bool:
         logger.error(f"Error detecting images in {path}: {e}")
         return False
 
-# Pydantic model for classification output
+# Classification model (optional, not enforced in this version)
 class Classification(BaseModel):
     agent: str
     path: str
@@ -51,24 +49,28 @@ SYSTEM_PROMPT = """
 You are a document classifier. Based on the input path (file path or URL), classify which agents should process the document.
 
 - For '.pdf', '.pptx', '.xlsx': always classify as 'File Parsing Agent'
-- For those same files('.pdf', '.pptx', '.xlsx'), if detect_images_in_document returns true, also classify as 'Image Processing Agent'
-- For '.eml', '.msg': classify as 'Email Agent',
-- For those same files('.eml', '.msg'), if detect_images_in_document returns true, also classify as 'Image Processing Agent'
+- If detect_images_in_document(path) returns true, also classify as 'Image Processing Agent'
+- For '.eml', '.msg': classify as 'Email Agent'
+- For those same files, also add 'Image Processing Agent' if detect_images_in_document returns true
 - For '.vtt', '.txt': classify as 'Transcript Agent'
 - For image extensions ('.jpg', '.png', '.gif'): classify as 'Image Processing Agent'
 - For unknown or no extension: default to 'File Parsing Agent'
 - If the path is a SharePoint URL (starts with 'http'), assume it may contain images
 
-Always return a list of classification objects like:
-[{"agent": "File Parsing Agent", "path": "<input>"}, {"agent": "Image Processing Agent", "path": "<input>"}]
+Return **only valid JSON**, like:
+[
+  {"agent": "File Parsing Agent", "path": "<input>"},
+  {"agent": "Image Processing Agent", "path": "<input>"}
+]
+No explanations. Do not add markdown or code blocks.
 """
 
-# Initialize Pydantic AI Agent with output model
+# Agent with safe JSON parsing
 document_classifier_agent = PydanticAIAgent(
     model="gpt-4o",
     system_prompt=SYSTEM_PROMPT,
     tools=[detect_images_in_document],
-    output_model=List[Classification],  # <-- output model here
+    output_parser="json",  # Safer than output_model when model might add explanations
 )
 
 @dag(
@@ -84,9 +86,12 @@ def doc_classifier_dag():
     def classify(input_path: str) -> List[Dict[str, Any]]:
         logger.info(f"Running classifier for: {input_path}")
         result = document_classifier_agent.run_sync(input_path)
-        # result.data is already a List[Classification] thanks to output_model
-        data = [c.dict() for c in result.data]  # convert pydantic objects to dicts
-        logger.info(f"Agent output: {data}")
+        try:
+            data = result.data  # Already parsed JSON
+            logger.info(f"Agent JSON Output: {data}")
+        except Exception as e:
+            logger.error(f"Failed to parse agent output: {e}")
+            raise
         return data
 
     @task
@@ -95,7 +100,7 @@ def doc_classifier_dag():
 
     @task
     def process(assignment: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"Assignment: Agent={assignment['agent']}, Path={assignment['path']}")
+        logger.info(f"Processing assignment: Agent={assignment['agent']}, Path={assignment['path']}")
         return {**assignment, "status": "processed"}
 
     @task
@@ -116,5 +121,5 @@ def doc_classifier_dag():
     processed = process.expand(assignment=flat)
     summarize(processed)
 
+# Define DAG
 doc_classifier_dag = doc_classifier_dag()
-
