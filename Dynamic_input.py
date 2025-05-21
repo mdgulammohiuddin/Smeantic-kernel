@@ -44,7 +44,7 @@ def detect_images_in_document(file_path: str) -> bool:
         extension = os.path.splitext(file_path)[1].lower()
         if extension == '.pdf':
             images = convert_from_path(file_path)
-            return len(images) > 0  # Images found if PDF has renderable pages
+            return len(images) > 0
         elif extension == '.pptx':
             prs = Presentation(file_path)
             for slide in prs.slides:
@@ -58,7 +58,7 @@ def detect_images_in_document(file_path: str) -> bool:
                 if sheet._images:
                     return True
             return False
-        return False  # Other extensions don’t need image check
+        return False
     except Exception as e:
         logging.error(f"Error detecting images in {file_path}: {e}")
         return False
@@ -78,7 +78,7 @@ You are a document classifier. Your task is to classify input paths into differe
   - If it ends with '.jpg', '.png', or '.gif', classify as 'Image Processing Agent'.
   - For any other extension or no extension, classify as 'File Parsing Agent'.
   - For URLs, also classify as 'SharePoint Agent' to indicate the source.
-- For local files with '.pdf', '.pptx', or '.xlsx', use the 'detect_images_in_document' tool to check for images. For URLs, assume images are present for these extensions unless otherwise specified.
+- For local files with '.pdf', '.pptx', or '.xlsx', use the 'detect_images_in_document' tool to check for images. For URLs with these extensions, assume images are present unless otherwise specified.
 
 For inputs that match multiple criteria (e.g., '.pptx' with images), return multiple JSON objects, one for each agent.
 
@@ -105,29 +105,30 @@ def document_classifier():
     """
 
     @task.agent(agent=classifier_pydantic_agent)
-    def classify_document(input_path: str) -> List[Assignment]:
+    def classify_document(input_path: str) -> List[dict]:
         """
         Classify a document or URL to one or more agents based on the system prompt.
         Args:
             input_path: Path to a local file or a SharePoint URL.
         Returns:
-            List of Assignment objects with agent name and path/URL.
+            List of dicts with agent name and path/URL.
         """
-        return input_path  # Pydantic AI agent processes the input
+        result = classifier_pydantic_agent.run(input_path)
+        return [assignment.model_dump() for assignment in result]
 
     @task
-    def show_classifications(classifications: List[List[Assignment]]):
+    def show_classifications(classifications: List[List[dict]]):
         """
         Display and log classification results.
         Args:
-            classifications: List of lists of Assignment objects.
+            classifications: List of lists of dicts.
         Returns:
-            Flattened list of assignments.
+            Flattened list of dicts.
         """
         logging.info("------ Classification Results ------")
         flattened = [assignment for sublist in classifications for assignment in sublist]
         for assignment in flattened:
-            logging.info(f"Agent: {assignment.agent}, Path: {assignment.path}")
+            logging.info(f"Agent: {assignment['agent']}, Path: {assignment['path']}")
         logging.info("------ End of Classification Results ------")
         return flattened
 
