@@ -89,12 +89,7 @@ def document_classifier():
     # Example inputs (local files and SharePoint URLs)
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
-        "https://hexawareonline.sharepoint.com/teams/tensaiGPT-PROD-HR-Docs/_api/web/GetFileByServerRelativeUrl('/teams/tensaiGPT-PROD-HR-Docs/Shared%20Documents/document1.pdf')",
-        "/path/to/example.eml",
-        "/path/to/message.msg",
-        "/path/to/transcript.vtt",
-        "/path/to/image.jpg",
-        "/path/to/unknown.xyz"
+        "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C",
     ]
 
     # Classify each input and show results
