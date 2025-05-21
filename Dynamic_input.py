@@ -4,15 +4,18 @@ from airflow import DAG
 from airflow.decorators import dag, task
 from datetime import datetime
 from pydantic import BaseModel, Field
+from pydantic_ai import Agent as PydanticAIAgent
 from dotenv import load_dotenv
 import logging
+from pdf2image import convert_from_path
+from pptx import Presentation
+from openpyxl import load_workbook
 
-# Configure logging, inspired by reference code
+# Configure logging, inspired by Reference Code 1
 logging.basicConfig(filename="document_router.log", level=logging.DEBUG)
 logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
 logging.getLogger('openai').setLevel(logging.DEBUG)
 logging.getLogger('airflow').setLevel(logging.DEBUG)
-logging.getLogger('airflow_ai_sdk').setLevel(logging.DEBUG)
 
 # Load .env file and set OpenAI API key
 load_dotenv()
@@ -28,37 +31,80 @@ class Assignment(BaseModel):
     agent: str = Field(description="Name of the assigned agent")
     path: str = Field(description="Path or URL of the document")
 
+# Tool function to detect images in documents
+def detect_images_in_document(file_path: str) -> bool:
+    """
+    Detects if a document (.pdf, .pptx, .xlsx) contains images.
+    Args:
+        file_path: Path to the document (local file only).
+    Returns:
+        bool: True if images are found, False otherwise.
+    """
+    try:
+        extension = os.path.splitext(file_path)[1].lower()
+        if extension == '.pdf':
+            images = convert_from_path(file_path)
+            return len(images) > 0  # Images found if PDF has renderable pages
+        elif extension == '.pptx':
+            prs = Presentation(file_path)
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if shape.shape_type == 13:  # MSO_SHAPE_TYPE.PICTURE
+                        return True
+            return False
+        elif extension == '.xlsx':
+            wb = load_workbook(file_path)
+            for sheet in wb:
+                if sheet._images:
+                    return True
+            return False
+        return False  # Other extensions don’t need image check
+    except Exception as e:
+        logging.error(f"Error detecting images in {file_path}: {e}")
+        return False
+
 # System prompt for document classification
 system_prompt = """
 You are a document classifier. Your task is to classify input paths into different agents based on these rules:
 
-- If the input starts with 'http' or 'https', classify it as 'SharePoint Agent'.
-- Else, if it's a local file path, classify based on its extension:
+- For each input (local file path or URL), determine the file extension:
+  - For local file paths, use the extension directly (e.g., '.pptx' from '/path/to/file.pptx').
+  - For URLs starting with 'http' or 'https', extract the file extension from the path component (e.g., '.pdf' from '/Shared%20Documents/document1.pdf' or from a SharePoint URL like ':b:/t/...'). If the extension is unclear, assume '.pdf' for SharePoint URLs.
+- Classify based on the extension:
   - If it ends with '.pdf', '.docx', '.ppt', '.pptx', '.xlsx', classify as 'File Parsing Agent'.
-  - If it ends with '.pdf', '.pptx', '.xlsx', also classify as 'Image Processing Agent' (these files may contain images).
+  - If it ends with '.pdf', '.pptx', '.xlsx' and the 'detect_images_in_document' tool returns True for the file, also classify as 'Image Processing Agent'.
   - If it ends with '.eml' or '.msg', classify as 'Email Agent'.
   - If it ends with '.vtt' or '.txt', classify as 'Transcript Agent'.
   - If it ends with '.jpg', '.png', or '.gif', classify as 'Image Processing Agent'.
-  - For any other extension, classify as 'File Parsing Agent'.
+  - For any other extension or no extension, classify as 'File Parsing Agent'.
+  - For URLs, also classify as 'SharePoint Agent' to indicate the source.
+- For local files with '.pdf', '.pptx', or '.xlsx', use the 'detect_images_in_document' tool to check for images. For URLs, assume images are present for these extensions unless otherwise specified.
 
-For inputs that match multiple criteria (e.g., '.pptx' for both 'File Parsing Agent' and 'Image Processing Agent'), return multiple JSON objects, one for each agent.
+For inputs that match multiple criteria (e.g., '.pptx' with images), return multiple JSON objects, one for each agent.
 
 Return a list of JSON objects, each with 'agent' and 'path' fields, e.g., [{'agent': 'File Parsing Agent', 'path': '/path/to/file.pptx'}, {'agent': 'Image Processing Agent', 'path': '/path/to/file.pptx'}]
 """
+
+# Define the Pydantic AI agent for classification
+classifier_pydantic_agent = PydanticAIAgent(
+    model="gpt-4o",
+    system_prompt=system_prompt,
+    tools=[detect_images_in_document],
+    result_type=List[Assignment]
+)
 
 @dag(
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['document_classification', 'airflow-ai-sdk', 'pydantic-ai'],
+    tags=['document_classification', 'pydantic-ai', 'airflow-ai-sdk'],
 )
 def document_classifier():
     """
-    DAG to classify local files and SharePoint URLs into agents using Airflow AI SDK.
+    DAG to classify local files and SharePoint URLs into agents using Pydantic AI.
     """
 
-    # Task to classify documents using @task.llm (replacing @task.agent)
-    @task.llm(model="gpt-4o", result_type=List[Assignment], system_prompt=system_prompt)
+    @task.agent(agent=classifier_pydantic_agent)
     def classify_document(input_path: str) -> List[Assignment]:
         """
         Classify a document or URL to one or more agents based on the system prompt.
@@ -67,9 +113,8 @@ def document_classifier():
         Returns:
             List of Assignment objects with agent name and path/URL.
         """
-        pass
+        return input_path  # Pydantic AI agent processes the input
 
-    # Task to display classification results, inspired by reference code
     @task
     def show_classifications(classifications: List[List[Assignment]]):
         """
@@ -90,6 +135,11 @@ def document_classifier():
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
         "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C",
+        "/path/to/example.eml",
+        "/path/to/message.msg",
+        "/path/to/transcript.vtt",
+        "/path/to/image.jpg",
+        "/path/to/unknown.xyz"
     ]
 
     # Classify each input and show results
