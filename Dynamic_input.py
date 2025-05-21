@@ -6,36 +6,20 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent as PydanticAIAgent
 from dotenv import load_dotenv
-import logging
-import sys
 from airflow.utils.log.logging_mixin import LoggingMixin
 from pdf2image import convert_from_path
 from pptx import Presentation
 from openpyxl import load_workbook
 
-# Configure logging for Airflow UI and file
-logger = logging.getLogger('airflow.task')
-logger.setLevel(logging.DEBUG)
-stream_handler = logging.StreamHandler(sys.stdout)
-stream_handler.setLevel(logging.DEBUG)
-stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(stream_handler)
-file_handler = logging.FileHandler('/app/fdi/airflow/logs/document_router.log')
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(file_handler)
-logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
-logging.getLogger('openai').setLevel(logging.DEBUG)
-logging.getLogger('airflow').setLevel(logging.DEBUG)
-
 # Load .env file and set OpenAI API key
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
-if api_key:
-    os.environ["OPENAI_API_KEY"] = api_key
-else:
-    logger.error("OPENAI_API_KEY not found in environment variables")
+if not api_key:
     raise ValueError("OPENAI_API_KEY is required")
+os.environ["OPENAI_API_KEY"] = api_key
+
+# Setup logger using Airflow’s built-in LoggingMixin
+logger = LoggingMixin().log
 
 # Pydantic model for assignment output
 class Assignment(BaseModel):
@@ -118,9 +102,9 @@ def document_classifier():
         """
         Classify a document or URL into one or more agent assignments.
         """
-        logger.debug(f"Classifying input: {input_path}")
+        logger.info(f"Classifying input: {input_path}")
         result = document_classifier_agent.run_sync(input_path)
-        logger.debug(f"Agent output: {[r.model_dump() for r in result]}")
+        logger.info(f"Agent output: {[r.model_dump() for r in result]}")
         return [assignment.model_dump() for assignment in result]
 
     @task
@@ -156,10 +140,12 @@ def document_classifier():
         logger.info("------ End of Results ------")
         return results
 
+    # Inputs to classify
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
         "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C",
     ]
+
     assignments_mapped = classify_document.expand(input_path=inputs)
     flattened = flatten_assignments(assignments_mapped)
     processed = process_assignment.expand(assignment=flattened)
