@@ -1,58 +1,44 @@
-Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-21T18:26:42.124251+00:00/task_id=classify/map_index=0/attempt=1.log"]
-[2025-05-21, 23:56:42] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
-[2025-05-21, 23:56:42] INFO - Filling up the DagBag from /app/fdi/dags/dyno3.py: source="airflow.models.dagbag.DagBag"
-[2025-05-21, 23:56:43] INFO - Running classifier for: /app/fdi/Documents/FRD.pptx: source="airflow.utils.log.logging_mixin.LoggingMixin"
-[2025-05-21, 23:56:43] INFO - Task instance is in running state: chan="stdout": source="task"
-[2025-05-21, 23:56:43] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
-[2025-05-21, 23:56:43] INFO - Current task name:classify: chan="stdout": source="task"
-[2025-05-21, 23:56:43] INFO - Dag name:document_classifier_dag: chan="stdout": source="task"
-[2025-05-21, 23:56:43] INFO - Executing LLM call: chan="stdout": source="task"
-Calling tool detect_images_in_document with args {"path":"/app/fdi/Documents/FRD.pptx"}: chan="stdout": source="task"
-[2025-05-21, 23:56:44] INFO - Agent output: [{'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}]: source="airflow.utils.log.logging_mixin.LoggingMixin"
-[2025-05-21, 23:56:44] INFO - Done. Returned value was: [{'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}]: source="airflow.task.operators.airflow_ai_sdk.operators.agent.AgentDecoratedOperator"
-[2025-05-21, 23:56:44] INFO - Prompt: [{'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}]: chan="stdout": source="task"
-[2025-05-21, 23:56:44] INFO - Error: Expected code to be unreachable, but got: {'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}: chan="stdout": source="task"
-[2025-05-21, 23:56:44] ERROR - Task failed with exception: source="task"
-AssertionError: Expected code to be unreachable, but got: {'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-21T18:34:15.909560+00:00/task_id=classify/map_index=1/attempt=1.log"]
+[2025-05-22, 00:04:16] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-22, 00:04:16] INFO - Filling up the DagBag from /app/fdi/dags/dyno3.py: source="airflow.models.dagbag.DagBag"
+[2025-05-22, 00:04:17] INFO - Running classifier for: https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C: source="airflow.utils.log.logging_mixin.LoggingMixin"
+[2025-05-22, 00:04:17] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-22, 00:04:17] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-22, 00:04:17] INFO - Current task name:classify: chan="stdout": source="task"
+[2025-05-22, 00:04:17] INFO - Dag name:document_classifier_dag: chan="stdout": source="task"
+[2025-05-22, 00:04:17] INFO - Executing LLM call: chan="stdout": source="task"
+Calling tool detect_images_in_document with args {"path":"https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C"}: chan="stdout": source="task"
+[2025-05-22, 00:04:22] ERROR - Task failed with exception: source="task"
+JSONDecodeError: Expecting value: line 1 column 1 (char 0)
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/agent.py", line 52 in execute
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/agent.py", line 44 in execute
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/agent.py", line 48 in execute
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/agent.py", line 578 in run_sync
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/decorator.py", line 251 in execute
 
-File "/usr/lib/python3.12/asyncio/base_events.py", line 687 in run_until_complete
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/agent.py", line 329 in run
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/providers/standard/operators/python.py", line 216 in execute
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/agent.py", line 1454 in __anext__
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/providers/standard/operators/python.py", line 239 in execute_callable
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_graph/graph.py", line 790 in __anext__
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/callback_runner.py", line 81 in run
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_graph/graph.py", line 763 in next
+File "/app/fdi/dags/dyno3.py", line 80 in classify
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/_agent_graph.py", line 264 in run
+File "/usr/lib/python3.12/json/__init__.py", line 346 in loads
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/_agent_graph.py", line 317 in _make_request
+File "/usr/lib/python3.12/json/decoder.py", line 337 in decode
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 193 in request
+File "/usr/lib/python3.12/json/decoder.py", line 355 in raw_decode
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 262 in _completions_create
-
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 327 in _map_message
-
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 382 in _map_user_message
-
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 452 in _map_user_prompt
-
-File "/usr/lib/python3.12/typing.py", line 2409 in assert_never
-
-[2025-05-21, 23:56:44] INFO - Task instance in failure state: chan="stdout": source="task"
-[2025-05-21, 23:56:44] INFO - Task start: chan="stdout": source="task"
-[2025-05-21, 23:56:44] INFO - Task:<Task(AgentDecoratedOperator): classify>: chan="stdout": source="task"
-[2025-05-21, 23:56:44] INFO - Failure caused by Expected code to be unreachable, but got: {'agent': 'File Parsing Agent', 'path': '/app/fdi/Documents/FRD.pptx'}: chan="stdout": source="task"
+[2025-05-22, 00:04:22] INFO - Task instance in failure state: chan="stdout": source="task"
+[2025-05-22, 00:04:22] INFO - Task start: chan="stdout": source="task"
+[2025-05-22, 00:04:22] INFO - Task:<Task(AgentDecoratedOperator): classify>: chan="stdout": source="task"
+[2025-05-22, 00:04:22] INFO - Failure caused by Expecting value: line 1 column 1 (char 0): chan="stdout": source="task"
