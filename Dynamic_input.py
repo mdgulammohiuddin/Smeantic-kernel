@@ -1,263 +1,162 @@
-from airflow import DAG
-from airflow.decorators import task
+import os
+from typing import Literal, List
+from airflow.decorators import dag, task
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Literal, List
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.client_credential import ClientCredential
 from office365.runtime.client_request_exception import ClientRequestException
-import os
 from dotenv import load_dotenv
-import PyPDF2
-from docx import Document
-from pptx import Presentation
-import eml_parser
-from pdf2image import convert_from_path
-import io
 import logging
+import io
 
 # Configure logging
 logging.basicConfig(filename="document_router.log", level=logging.INFO)
 
-# Load .env file
+# Load .env file and set OpenAI API key
 load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
+if api_key:
+    os.environ["OPENAI_API_KEY"] = api_key
+else:
+    logging.error("OPENAI_API_KEY not found in environment variables")
+    raise ValueError("OPENAI_API_KEY is required")
 
-# Pydantic model for document assignment
-class DocumentAssignment(BaseModel):
-    document_path: str = Field(description="Path or URL of the document")
-    assigned_agent: Literal["File Parsing Agent", "Email Agent", "Transcript Agent", "Image Processing Agent"] = Field(description="Agent to process the document")
+# Pydantic models
+class DocumentMetadata(BaseModel):
+    path: str = Field(description="Path or URL of the document")
+    content_type: str = Field(description="MIME type or file extension")
+    has_images: bool = Field(description="Whether the document contains images")
+    is_sharepoint: bool = Field(description="Whether the document is from SharePoint")
+
+class AgentAssignment(BaseModel):
+    document: DocumentMetadata
+    agent_type: Literal["file_parsing", "email", "transcript", "image_processing"]
+    priority: int = Field(description="Processing priority (1-5)", ge=1, le=5)
 
 @task
-def route_documents() -> List[DocumentAssignment]:
-    # Hardcoded files and URLs
-    DOCUMENTS = [
-        "/path/to/document1.pdf",
-        "/path/to/document2.docx",
-        "/path/to/document3.pptx",
-        "/path/to/document4.txt",
-        "/path/to/email.eml",
-        "/path/to/spreadsheet.xlsx",
-        "/path/to/subtitle.vtt"
-    ]
-    SHAREPOINT_URLS = [
-        "https://your-tenant.sharepoint.com/sites/your-site/_api/web/GetFileByServerRelativeUrl('/sites/your-site/Shared%20Documents/document1.pdf')",
-        "https://your-tenant.sharepoint.com/sites/your-site/_api/web/GetFileByServerRelativeUrl('/sites/your-site/Shared%20Documents/document2.docx')"
-    ]
-
-    # Get SharePoint credentials from .env
-    try:
-        client_id = os.getenv("SHAREPOINT_CLIENT_ID")
-        client_secret = os.getenv("SHAREPOINT_CLIENT_SECRET")
-        tenant_id = os.getenv("SHAREPOINT_TENANT_ID")
-        if not all([client_id, client_secret, tenant_id]):
-            raise ValueError("Missing SharePoint credentials in .env file")
-        site_url = "https://your-tenant.sharepoint.com/sites/your-site"
-    except Exception as e:
-        logging.error(f"Failed to load SharePoint credentials from .env: {str(e)}")
-        raise
-
-    def validate_source(source: str) -> bool:
-        """Validate if the source (file or URL) is accessible."""
-        if source.startswith("http"):
-            try:
-                ctx = ClientContext(site_url).with_credentials(ClientCredential(client_id, client_secret))
-                file = ctx.web.get_file_by_server_relative_url(source.split("GetFileByServerRelativeUrl")[1][1:-1]).execute_query()
-                return True
-            except ClientRequestException as e:
-                logging.error(f"Failed to validate SharePoint URL {source}: {str(e)}")
-                return False
-        return os.path.exists(source)
-
-    def download_sharepoint_file(url: str) -> io.BytesIO:
-        """Download SharePoint file to a BytesIO object."""
+def validate_and_extract_metadata(source: str, is_sharepoint: bool = False) -> DocumentMetadata:
+    """Validate source and extract document metadata"""
+    if is_sharepoint:
         try:
-            ctx = ClientContext(site_url).with_credentials(ClientCredential(client_id, client_secret))
-            file = ctx.web.get_file_by_server_relative_url(url.split("GetFileByServerRelativeUrl")[1][1:-1]).execute_query()
-            content = io.BytesIO()
-            file.download(content).execute_query()
-            content.seek(0)
-            return content
-        except ClientRequestException as e:
-            logging.error(f"Failed to download SharePoint file {url}: {str(e)}")
+            client_id = os.getenv("CLIENT_ID")
+            client_secret = os.getenv("CLIENT_SECRET")
+            site_url = "https://hexawareonline.sharepoint.com/teams/tensaiGPT-PROD-HR-Docs"
+            ctx = ClientContext(site_url).with_credentials(
+                ClientCredential(client_id, client_secret)
+            )
+            
+            file = ctx.web.get_file_by_server_relative_url(
+                source.split("GetFileByServerRelativeUrl")[1][1:-1]
+            ).execute_query()
+            
+            return DocumentMetadata(
+                path=source,
+                content_type=file.properties["Name"].split(".")[-1].lower(),
+                has_images=False,  # Will be updated by content analysis
+                is_sharepoint=True
+            )
+        except Exception as e:
+            logging.error(f"SharePoint validation failed: {str(e)}")
             raise
+    
+    if not os.path.exists(source):
+        raise ValueError(f"Local file not found: {source}")
+    
+    return DocumentMetadata(
+        path=source,
+        content_type=source.split(".")[-1].lower(),
+        has_images=False,  # Will be updated by content analysis
+        is_sharepoint=False
+    )
 
-    def has_images_in_pdf(file_path: str) -> bool:
-        """Check if a PDF contains images."""
-        try:
-            images = convert_from_path(file_path, first_page=1, last_page=1)  # Check first page for efficiency
-            return len(images) > 0
-        except Exception as e:
-            logging.warning(f"Error checking images in PDF {file_path}: {str(e)}")
-            return False
+@task.llm(
+    model="gpt-4",
+    task_id="determine_agents",
+    result_type=List[AgentAssignment],
+    system_prompt="""
+    You are a document routing expert that analyzes document metadata and assigns appropriate processing agents.
+    Consider the following agents:
+    - File Parsing Agent: Handles PDF, PPT, PPTX, DOCX for text extraction
+    - Email Agent: Processes email (EML) files
+    - Transcript Agent: Processes text-heavy documents and transcripts
+    - Image Processing Agent: Handles documents with embedded images
 
-    def has_images_in_docx(file_path: str) -> bool:
-        """Check if a DOCX contains images."""
-        try:
-            doc = Document(file_path)
-            for rel in doc.part.rels.values():
-                if "image" in rel.target_ref:
-                    return True
-            return False
-        except Exception as e:
-            logging.warning(f"Error checking images in DOCX {file_path}: {str(e)}")
-            return False
+    Analyze the document metadata and return the appropriate agent assignments.
+    """
+)
+def determine_agents(metadata: DocumentMetadata) -> List[AgentAssignment]:
+    """Use LLM to determine which agents should process the document"""
+    # The LLM will analyze the metadata and return appropriate agent assignments
+    # The actual implementation is handled by the task.llm decorator
+    pass
 
-    def has_images_in_pptx(file_path: str) -> bool:
-        """Check if a PPTX contains images."""
-        try:
-            prs = Presentation(file_path)
-            for slide in prs.slides:
-                for shape in slide.shapes:
-                    if shape.shape_type == 13:  # MSO_SHAPE_TYPE.PICTURE
-                        return True
-            return False
-        except Exception as e:
-            logging.warning(f"Error checking images in PPTX {file_path}: {str(e)}")
-            return False
+@task(task_id="file_parsing_task")
+def process_with_file_parsing_agent(assignment: AgentAssignment) -> dict:
+    """Process document with File Parsing Agent"""
+    logging.info(f"Processing {assignment.document.path} with File Parsing Agent")
+    # Add file parsing logic here
+    return {"status": "success", "agent": "file_parsing"}
 
-    def has_images_in_eml(file_path: str) -> bool:
-        """Check if an EML contains image attachments."""
-        try:
-            with open(file_path, "r") as f:
-                eml = eml_parser.EmlParser().decode_email(f.read())
-                for attachment in eml.get("attachment", []):
-                    if attachment["content_type"].startswith("image/"):
-                        return True
-                return False
-        except Exception as e:
-            logging.warning(f"Error checking images in EML {file_path}: {str(e)}")
-            return False
+@task(task_id="email_task")
+def process_with_email_agent(assignment: AgentAssignment) -> dict:
+    """Process document with Email Agent"""
+    logging.info(f"Processing {assignment.document.path} with Email Agent")
+    # Add email processing logic here
+    return {"status": "success", "agent": "email"}
 
-    def assign_agent(source: str, is_sharepoint: bool = False) -> List[DocumentAssignment]:
-        """Assign agents based on file extension and image content."""
-        assignments = []
-        extension = source.lower().split(".")[-1]
+@task(task_id="transcript_task")
+def process_with_transcript_agent(assignment: AgentAssignment) -> dict:
+    """Process document with Transcript Agent"""
+    logging.info(f"Processing {assignment.document.path} with Transcript Agent")
+    # Add transcript processing logic here
+    return {"status": "success", "agent": "transcript"}
 
-        # Handle SharePoint files by downloading to a temporary file
-        temp_file = None
-        if is_sharepoint:
-            content = download_sharepoint_file(source)
-            temp_file = f"/tmp/{source.split('/')[-1]}"
-            with open(temp_file, "wb") as f:
-                f.write(content.read())
-            source = temp_file
+@task(task_id="image_processing_task")
+def process_with_image_processing_agent(assignment: AgentAssignment) -> dict:
+    """Process document with Image Processing Agent"""
+    logging.info(f"Processing {assignment.document.path} with Image Processing Agent")
+    # Add image processing logic here
+    return {"status": "success", "agent": "image_processing"}
 
-        # Base assignments by extension
-        if extension in ["pdf", "ppt", "pptx"]:
-            assignments.append(DocumentAssignment(
-                document_path=source,
-                assigned_agent="File Parsing Agent"
-            ))
-        elif extension == "eml":
-            assignments.append(DocumentAssignment(
-                document_path=source,
-                assigned_agent="Email Agent"
-            ))
-        elif extension == "vtt":
-            assignments.append(DocumentAssignment(
-                document_path=source,
-                assigned_agent="Transcript Agent"
-            ))
-        elif extension == "docx":
-            assignments.extend([
-                DocumentAssignment(
-                    document_path=source,
-                    assigned_agent="File Parsing Agent"
-                ),
-                DocumentAssignment(
-                    document_path=source,
-                    assigned_agent="Transcript Agent"
-                )
-            ])
-
-        # Check for images and assign to Image Processing Agent
-        if extension == "pdf" and has_images_in_pdf(source):
-            assignments.append(DocumentAssignment(
-                document_path=source,
-                assigned_agent="Image Processing Agent"
-            ))
-        elif extension == "docx" and has_images_in_docx(source):
-            assignments.append(DocumentAssignment(
-                document_path=source,
-                assigned_agent="Image Processing Agent"
-            ))
-        elif extension in ["ppt", "pptx"] and has_images_in_pptx(source):
-            assignments.append(DocumentAssignment(
-                document_path=source,
-                assigned_agent="Image Processing Agent"
-            ))
-        elif extension == "eml" and has_images_in_eml(source):
-            assignments.append(DocumentAssignment(
-                document_path=source,
-                assigned_agent="Image Processing Agent"
-            ))
-
-        # Clean up temporary file for SharePoint
-        if is_sharepoint and temp_file and os.path.exists(temp_file):
-            try:
-                os.remove(temp_file)
-            except Exception as e:
-                logging.warning(f"Failed to remove temporary file {temp_file}: {str(e)}")
-
-        return assignments
-
-    # Process all sources
-    results = []
-    for source in DOCUMENTS:
-        if validate_source(source):
-            assignments = assign_agent(source)
-            for assignment in assignments:
-                logging.info(f"Assigned {assignment.document_path} to {assignment.assigned_agent}")
-            results.extend(assignments)
-        else:
-            logging.error(f"Source {source} is invalid or inaccessible")
-
-    for source in SHAREPOINT_URLS:
-        if validate_source(source):
-            assignments = assign_agent(source, is_sharepoint=True)
-            for assignment in assignments:
-                logging.info(f"Assigned {assignment.document_path} to {assignment.assigned_agent}")
-            results.extend(assignments)
-        else:
-            logging.error(f"Source {source} is invalid or inaccessible")
-
-    return results
-
-# Define the DAG
-with DAG(
-    dag_id="document_router",
+@dag(
+    dag_id="intelligent_document_router",
+    schedule=None,
     start_date=datetime(2025, 1, 1),
-    schedule_interval=None,
-):
-    assignments = route_documents()
+    catchup=False,
+)
+def document_router_dag():
+    # Define document sources
+    documents = ["/app/fdi/Documents/FRD.pptx"]
+    sharepoint_urls = [
+        "https://hexawareonline.sharepoint.com/teams/tensaiGPT-PROD-HR-Docs/Shared%20Documents/Forms/AllItems.aspx"
+    ]
+    
+    # Process local documents
+    local_metadata = [validate_and_extract_metadata(doc) for doc in documents]
+    
+    # Process SharePoint documents
+    sharepoint_metadata = [
+        validate_and_extract_metadata(url, is_sharepoint=True) 
+        for url in sharepoint_urls
+    ]
+    
+    # Combine all document metadata
+    all_metadata = local_metadata + sharepoint_metadata
+    
+    # Determine agent assignments using LLM
+    assignments = determine_agents.expand(metadata=all_metadata)
+    
+    # Route to appropriate agents
+    for assignment in assignments:
+        if assignment.agent_type == "file_parsing":
+            process_with_file_parsing_agent(assignment)
+        elif assignment.agent_type == "email":
+            process_with_email_agent(assignment)
+        elif assignment.agent_type == "transcript":
+            process_with_transcript_agent(assignment)
+        elif assignment.agent_type == "image_processing":
+            process_with_image_processing_agent(assignment)
 
-    # Example downstream tasks for each agent
-    @task
-    def process_file_parsing_agent(assignment: DocumentAssignment):
-        if assignment.assigned_agent == "File Parsing Agent":
-            logging.info(f"Processing {assignment.document_path} with File Parsing Agent")
-            # Add logic to send to File Parsing Agent
-
-    @task
-    def process_email_agent(assignment: DocumentAssignment):
-        if assignment.assigned_agent == "Email Agent":
-            logging.info(f"Processing {assignment.document_path} with Email Agent")
-            # Add logic to send to Email Agent
-
-    @task
-    def process_transcript_agent(assignment: DocumentAssignment):
-        if assignment.assigned_agent == "Transcript Agent":
-            logging.info(f"Processing {assignment.document_path} with Transcript Agent")
-            # Add logic to send to Transcript Agent
-
-    @task
-    def process_image_processing_agent(assignment: DocumentAssignment):
-        if assignment.assigned_agent == "Image Processing Agent":
-            logging.info(f"Processing {assignment.document_path} with Image Processing Agent")
-            # Add logic to send to Image Processing Agent
-
-    # Expand tasks to process assignments
-    process_file_parsing_agent.expand(assignment=assignments)
-    process_email_agent.expand(assignment=assignments)
-    process_transcript_agent.expand(assignment=assignments)
-    process_image_processing_agent.expand(assignment=assignments)
+# Create DAG instance
+dag_instance = document_router_dag()
