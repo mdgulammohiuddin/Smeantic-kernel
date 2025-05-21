@@ -1,10 +1,12 @@
 from airflow import DAG
 from airflow.decorators import task
+from airflow.hooks.base import BaseHook
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Literal, List
 from office365.sharepoint.client_context import ClientContext
-from office365.runtime.auth.user_credential import UserCredential
+from office365.runtime.auth.client_credential import ClientCredential
+from office365.runtime.client_request_exception import ClientRequestException
 import os
 import PyPDF2
 from docx import Document
@@ -12,6 +14,7 @@ from pptx import Presentation
 import eml_parser
 from pdf2image import convert_from_path
 import io
+import json
 import logging
 
 # Configure logging
@@ -39,31 +42,42 @@ def route_documents() -> List[DocumentAssignment]:
         "https://your-tenant.sharepoint.com/sites/your-site/_api/web/GetFileByServerRelativeUrl('/sites/your-site/Shared%20Documents/document2.docx')"
     ]
 
-    # SharePoint credentials (use Airflow Connections in production)
-    site_url = "https://your-tenant.sharepoint.com/sites/your-site"
-    username = "your-username"
-    password = "your-password"
+    # Get SharePoint credentials from Airflow Connection
+    try:
+        conn = BaseHook.get_connection("sharepoint_conn")
+        credentials = json.loads(conn.extra)
+        client_id = credentials["client_id"]
+        client_secret = credentials["client_secret"]
+        tenant_id = credentials["tenant_id"]
+        site_url = "https://your-tenant.sharepoint.com/sites/your-site"
+    except Exception as e:
+        logging.error(f"Failed to load SharePoint credentials: {str(e)}")
+        raise
 
     def validate_source(source: str) -> bool:
         """Validate if the source (file or URL) is accessible."""
         if source.startswith("http"):
             try:
-                ctx = ClientContext(site_url).with_credentials(UserCredential(username, password))
+                ctx = ClientContext(site_url).with_credentials(ClientCredential(client_id, client_secret))
                 file = ctx.web.get_file_by_server_relative_url(source.split("GetFileByServerRelativeUrl")[1][1:-1]).execute_query()
                 return True
-            except Exception as e:
+            except ClientRequestException as e:
                 logging.error(f"Failed to validate SharePoint URL {source}: {str(e)}")
                 return False
         return os.path.exists(source)
 
     def download_sharepoint_file(url: str) -> io.BytesIO:
         """Download SharePoint file to a BytesIO object."""
-        ctx = ClientContext(site_url).with_credentials(UserCredential(username, password))
-        file = ctx.web.get_file_by_server_relative_url(url.split("GetFileByServerRelativeUrl")[1][1:-1]).execute_query()
-        content = io.BytesIO()
-        file.download(content).execute_query()
-        content.seek(0)
-        return content
+        try:
+            ctx = ClientContext(site_url).with_credentials(ClientCredential(client_id, client_secret))
+            file = ctx.web.get_file_by_server_relative_url(url.split("GetFileByServerRelativeUrl")[1][1:-1]).execute_query()
+            content = io.BytesIO()
+            file.download(content).execute_query()
+            content.seek(0)
+            return content
+        except ClientRequestException as e:
+            logging.error(f"Failed to download SharePoint file {url}: {str(e)}")
+            raise
 
     def has_images_in_pdf(file_path: str) -> bool:
         """Check if a PDF contains images."""
@@ -178,7 +192,10 @@ def route_documents() -> List[DocumentAssignment]:
 
         # Clean up temporary file for SharePoint
         if is_sharepoint and temp_file and os.path.exists(temp_file):
-            os.remove(temp_file)
+            try:
+                os.remove(temp_file)
+            except Exception as e:
+                logging.warning(f"Failed to remove temporary file {temp_file}: {str(e)}")
 
         return assignments
 
