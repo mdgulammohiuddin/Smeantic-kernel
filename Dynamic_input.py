@@ -1,5 +1,6 @@
 import os
 from typing import List, Dict, Any
+from airflow import DAG
 from airflow.decorators import dag, task
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -60,104 +61,34 @@ def detect_images_in_document(file_path: str) -> bool:
 
 # Define the system prompt for document classification
 SYSTEM_PROMPT = """
-You are a document classifier. Analyze the input path and determine appropriate agents based on these rules:
+You are a document classifier. Analyze the input path (a string representing a local file path or SharePoint URL) and determine appropriate agents based on these rules:
 
-1. File types and their agents:
-   - PDF, DOCX, PPT, PPTX, XLSX → File Parsing Agent
-   - PDF, PPTX, XLSX with images → Also Image Processing Agent
-   - EML, MSG → Email Agent
-   - VTT, TXT → Transcript Agent
-   - JPG, PNG, GIF → Image Processing Agent
-   - SharePoint URLs → Add SharePoint Agent
+- Determine the file extension:
+  - For local paths, use the extension (e.g., '.pptx' from '/path/to/file.pptx').
+  - For URLs starting with 'http' or 'https', extract the extension from the path (e.g., '.pdf' from '/Shared%20Documents/document1.pdf' or ':b:/t/...'). Assume '.pdf' if unclear.
+- Classify based on the extension:
+  - '.pdf', '.docx', '.ppt', '.pptx', '.xlsx' → File Parsing Agent.
+  - '.pdf', '.pptx', '.xlsx' → Image Processing Agent if 'detect_images_in_document' returns True (local files only; assume True for URLs).
+  - '.eml', '.msg' → Email Agent.
+  - '.vtt', '.txt' → Transcript Agent.
+  - '.jpg', '.png', '.gif' → Image Processing Agent.
+  - Other/no extension → File Parsing Agent.
+  - URLs → SharePoint Agent.
+- For local '.pdf', '.pptx', '.xlsx', use 'detect_images_in_document' to check for images.
 
-2. For local files (.pdf, .pptx, .xlsx):
-   - Use detect_images_in_document tool to check for images
-   - If images found, include Image Processing Agent
+For inputs matching multiple criteria (e.g., '.pptx' with images), return multiple assignments.
 
-3. For SharePoint URLs:
-   - Assume PDF format if extension unclear
-   - Assume images present unless specified otherwise
-
-Return a list of assignments with agent and path for each applicable agent.
+Input: A single string (file path or URL).
+Output: A list of JSON objects, each with 'agent' and 'path' fields, e.g., [{'agent': 'File Parsing Agent', 'path': '/path/to/file.pptx'}, {'agent': 'Image Processing Agent', 'path': '/path/to/file.pptx'}].
 """
 
 # Create a Pydantic AI agent instance for document classification
 document_classifier_agent = PydanticAIAgent(
     model="gpt-4",
     system_prompt=SYSTEM_PROMPT,
+    tools=[detect_images_in_document],
     result_type=List[Assignment]
 )
-
-# Use task.agent to decorate the classify_document task
-@task.agent(agent=document_classifier_agent)
-def classify_document(input_path: str) -> List[Dict[str, Any]]:
-    """
-    Classify a document or URL into one or more agent assignments.
-    This function uses the Pydantic AI agent to return a list of assignments.
-    """
-    # Check for images if it's a local file with supported extension
-    has_images = False
-    if os.path.isfile(input_path):
-        ext = os.path.splitext(input_path)[1].lower()
-        if ext in ['.pdf', '.pptx', '.xlsx']:
-            has_images = detect_images_in_document(input_path)
-    
-    # Build assignments based on static rules (as fallback/default logic)
-    assignments = []
-    ext = os.path.splitext(input_path)[1].lower()
-    # File Parsing Agent
-    if ext in ['.pdf', '.docx', '.ppt', '.pptx', '.xlsx']:
-        assignments.append(Assignment(agent="File Parsing Agent", path=input_path))
-    # Image Processing Agent when images are detected or typical image extension
-    if has_images or ext in ['.jpg', '.png', '.gif']:
-        assignments.append(Assignment(agent="Image Processing Agent", path=input_path))
-    # Email Agent
-    if ext in ['.eml', '.msg']:
-        assignments.append(Assignment(agent="Email Agent", path=input_path))
-    # Transcript Agent
-    if ext in ['.vtt', '.txt']:
-        assignments.append(Assignment(agent="Transcript Agent", path=input_path))
-    # SharePoint Agent for URLs
-    if input_path.startswith(('http://', 'https://')):
-        assignments.append(Assignment(agent="SharePoint Agent", path=input_path))
-    
-    # The Pydantic AI agent can override or augment these assignments.
-    # Call the agent synchronously.
-    return document_classifier_agent.run_sync(assignments)
- 
-@task
-def flatten_assignments(list_of_assignments: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    """
-    Flatten a list of lists of assignments into a single list.
-    """
-    flat_list = []
-    for sublist in list_of_assignments:
-        flat_list.extend(sublist)
-    return flat_list
-
-@task
-def process_assignment(assignment: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Process a single assignment.
-    """
-    logging.info(f"Processing assignment - Agent: {assignment['agent']}, Path: {assignment['path']}")
-    # Here you could add more processing logic based on assignment['agent']
-    return {
-        "agent": assignment['agent'],
-        "path": assignment['path'],
-        "status": "processed"
-    }
-
-@task
-def aggregate_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Aggregate and log all processing results.
-    """
-    logging.info("------ Processing Results ------")
-    for result in results:
-        logging.info(f"Agent: {result['agent']}, Path: {result['path']}, Status: {result['status']}")
-    logging.info("------ End of Results ------")
-    return results
 
 @dag(
     dag_id="document_classifier",
@@ -170,16 +101,57 @@ def document_classifier():
     """
     DAG to classify local files and SharePoint URLs into agent assignments.
     """
+
+    @task.agent(agent=document_classifier_agent)
+    def classify_document(input_path: str) -> List[Dict[str, Any]]:
+        """
+        Classify a document or URL into one or more agent assignments.
+        """
+        result = document_classifier_agent.run_sync(input_path)
+        return [assignment.model_dump() for assignment in result]
+
+    @task
+    def flatten_assignments(list_of_assignments: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        """
+        Flatten a list of lists of assignments into a single list.
+        """
+        flat_list = []
+        for sublist in list_of_assignments:
+            flat_list.extend(sublist)
+        return flat_list
+
+    @task
+    def process_assignment(assignment: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process a single assignment.
+        """
+        logging.info(f"Processing assignment - Agent: {assignment['agent']}, Path: {assignment['path']}")
+        return {
+            "agent": assignment['agent'],
+            "path": assignment['path'],
+            "status": "processed"
+        }
+
+    @task
+    def aggregate_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Aggregate and log all processing results.
+        """
+        logging.info("------ Processing Results ------")
+        for result in results:
+            logging.info(f"Agent: {result['agent']}, Path: {result['path']}, Status: {result['status']}")
+        logging.info("------ End of Results ------")
+        return results
+
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
         "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C",
     ]
     # Map classification over each input
     assignments_mapped = classify_document.expand(input_path=inputs)
-    # assignments_mapped is a list (one element per input), each element is a list of assignments.
-    # Flatten the mapped assignments.
+    # Flatten the mapped assignments
     flattened = flatten_assignments(assignments_mapped)
-    # Dynamically map task to process each assignment in the flattened list.
+    # Process each assignment
     processed = process_assignment.expand(assignment=flattened)
     aggregate_results(processed)
 
