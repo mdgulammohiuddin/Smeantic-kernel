@@ -10,7 +10,7 @@ from airflow.utils.log.logging_mixin import LoggingMixin
 from pdf2image import convert_from_path
 from pptx import Presentation
 from openpyxl import load_workbook
-
+import json
 # Load environment variables
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -63,18 +63,24 @@ document_classifier_agent = PydanticAIAgent(
 )
 
 @dag(
-    dag_id="document_classifier",
+    dag_id="document_classifier_dag",
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["document_classification"],
 )
-def document_classifier():
+def doc_classifier_dag():
 
     @task.agent(agent=document_classifier_agent)
     def classify(input_path: str) -> List[Dict[str, Any]]:
         logger.info(f"Running classifier for: {input_path}")
-        return document_classifier_agent.run_sync(input_path)
+        result = document_classifier_agent.run_sync(input_path)
+
+        
+        data = json.loads(result.data) if isinstance(result.data, str) else result.data
+
+        logger.info(f"Agent output: {data}")
+        return data
 
     @task
     def flatten(results: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
@@ -95,7 +101,7 @@ def document_classifier():
     # Inputs
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
-        "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/example",
+        "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C",
     ]
 
     classifications = classify.expand(input_path=inputs)
@@ -103,4 +109,4 @@ def document_classifier():
     processed = process.expand(assignment=flat)
     summarize(processed)
 
-doc_classifier_dag = document_classifier()
+doc_classifier_dag = doc_classifier_dag()
