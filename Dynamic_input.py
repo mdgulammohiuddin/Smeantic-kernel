@@ -1,6 +1,5 @@
 import os
-from typing import List
-from airflow import DAG
+from typing import List, Dict, Any
 from airflow.decorators import dag, task
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -11,7 +10,7 @@ from pdf2image import convert_from_path
 from pptx import Presentation
 from openpyxl import load_workbook
 
-# Configure logging, inspired by Reference Code 1
+# Configure logging
 logging.basicConfig(filename="document_router.log", level=logging.DEBUG)
 logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
 logging.getLogger('openai').setLevel(logging.DEBUG)
@@ -35,10 +34,6 @@ class Assignment(BaseModel):
 def detect_images_in_document(file_path: str) -> bool:
     """
     Detects if a document (.pdf, .pptx, .xlsx) contains images.
-    Args:
-        file_path: Path to the document (local file only).
-    Returns:
-        bool: True if images are found, False otherwise.
     """
     try:
         extension = os.path.splitext(file_path)[1].lower()
@@ -63,89 +58,129 @@ def detect_images_in_document(file_path: str) -> bool:
         logging.error(f"Error detecting images in {file_path}: {e}")
         return False
 
-# System prompt for document classification
-system_prompt = """
-You are a document classifier. Your task is to classify input paths into different agents based on these rules:
+# Define the system prompt for document classification
+SYSTEM_PROMPT = """
+You are a document classifier. Analyze the input path and determine appropriate agents based on these rules:
 
-- For each input (local file path or URL), determine the file extension:
-  - For local file paths, use the extension directly (e.g., '.pptx' from '/path/to/file.pptx').
-  - For URLs starting with 'http' or 'https', extract the file extension from the path component (e.g., '.pdf' from '/Shared%20Documents/document1.pdf' or from a SharePoint URL like ':b:/t/...'). If the extension is unclear, assume '.pdf' for SharePoint URLs.
-- Classify based on the extension:
-  - If it ends with '.pdf', '.docx', '.ppt', '.pptx', '.xlsx', classify as 'File Parsing Agent'.
-  - If it ends with '.pdf', '.pptx', '.xlsx' and the 'detect_images_in_document' tool returns True for the file, also classify as 'Image Processing Agent'.
-  - If it ends with '.eml' or '.msg', classify as 'Email Agent'.
-  - If it ends with '.vtt' or '.txt', classify as 'Transcript Agent'.
-  - If it ends with '.jpg', '.png', or '.gif', classify as 'Image Processing Agent'.
-  - For any other extension or no extension, classify as 'File Parsing Agent'.
-  - For URLs, also classify as 'SharePoint Agent' to indicate the source.
-- For local files with '.pdf', '.pptx', or '.xlsx', use the 'detect_images_in_document' tool to check for images. For URLs with these extensions, assume images are present unless otherwise specified.
+1. File types and their agents:
+   - PDF, DOCX, PPT, PPTX, XLSX → File Parsing Agent
+   - PDF, PPTX, XLSX with images → Also Image Processing Agent
+   - EML, MSG → Email Agent
+   - VTT, TXT → Transcript Agent
+   - JPG, PNG, GIF → Image Processing Agent
+   - SharePoint URLs → Add SharePoint Agent
 
-For inputs that match multiple criteria (e.g., '.pptx' with images), return multiple JSON objects, one for each agent.
+2. For local files (.pdf, .pptx, .xlsx):
+   - Use detect_images_in_document tool to check for images
+   - If images found, include Image Processing Agent
 
-Return a list of JSON objects, each with 'agent' and 'path' fields, e.g., [{'agent': 'File Parsing Agent', 'path': '/path/to/file.pptx'}, {'agent': 'Image Processing Agent', 'path': '/path/to/file.pptx'}]
+3. For SharePoint URLs:
+   - Assume PDF format if extension unclear
+   - Assume images present unless specified otherwise
+
+Return a list of assignments with agent and path for each applicable agent.
 """
 
-# Define the Pydantic AI agent for classification
-classifier_pydantic_agent = PydanticAIAgent(
-    model="gpt-4o",
-    system_prompt=system_prompt,
-    tools=[detect_images_in_document],
+# Create a Pydantic AI agent instance for document classification
+document_classifier_agent = PydanticAIAgent(
+    model="gpt-4",
+    system_prompt=SYSTEM_PROMPT,
     result_type=List[Assignment]
 )
 
+# Use task.agent to decorate the classify_document task
+@task.agent(agent=document_classifier_agent)
+def classify_document(input_path: str) -> List[Dict[str, Any]]:
+    """
+    Classify a document or URL into one or more agent assignments.
+    This function uses the Pydantic AI agent to return a list of assignments.
+    """
+    # Check for images if it's a local file with supported extension
+    has_images = False
+    if os.path.isfile(input_path):
+        ext = os.path.splitext(input_path)[1].lower()
+        if ext in ['.pdf', '.pptx', '.xlsx']:
+            has_images = detect_images_in_document(input_path)
+    
+    # Build assignments based on static rules (as fallback/default logic)
+    assignments = []
+    ext = os.path.splitext(input_path)[1].lower()
+    # File Parsing Agent
+    if ext in ['.pdf', '.docx', '.ppt', '.pptx', '.xlsx']:
+        assignments.append(Assignment(agent="File Parsing Agent", path=input_path))
+    # Image Processing Agent when images are detected or typical image extension
+    if has_images or ext in ['.jpg', '.png', '.gif']:
+        assignments.append(Assignment(agent="Image Processing Agent", path=input_path))
+    # Email Agent
+    if ext in ['.eml', '.msg']:
+        assignments.append(Assignment(agent="Email Agent", path=input_path))
+    # Transcript Agent
+    if ext in ['.vtt', '.txt']:
+        assignments.append(Assignment(agent="Transcript Agent", path=input_path))
+    # SharePoint Agent for URLs
+    if input_path.startswith(('http://', 'https://')):
+        assignments.append(Assignment(agent="SharePoint Agent", path=input_path))
+    
+    # The Pydantic AI agent can override or augment these assignments.
+    # Call the agent synchronously.
+    return document_classifier_agent.run_sync(assignments)
+ 
+@task
+def flatten_assignments(list_of_assignments: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """
+    Flatten a list of lists of assignments into a single list.
+    """
+    flat_list = []
+    for sublist in list_of_assignments:
+        flat_list.extend(sublist)
+    return flat_list
+
+@task
+def process_assignment(assignment: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Process a single assignment.
+    """
+    logging.info(f"Processing assignment - Agent: {assignment['agent']}, Path: {assignment['path']}")
+    # Here you could add more processing logic based on assignment['agent']
+    return {
+        "agent": assignment['agent'],
+        "path": assignment['path'],
+        "status": "processed"
+    }
+
+@task
+def aggregate_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Aggregate and log all processing results.
+    """
+    logging.info("------ Processing Results ------")
+    for result in results:
+        logging.info(f"Agent: {result['agent']}, Path: {result['path']}, Status: {result['status']}")
+    logging.info("------ End of Results ------")
+    return results
+
 @dag(
+    dag_id="document_classifier",
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=['document_classification', 'pydantic-ai', 'airflow-ai-sdk'],
+    tags=["document_classification", "airflow-ai-sdk"],
 )
 def document_classifier():
     """
-    DAG to classify local files and SharePoint URLs into agents using Pydantic AI.
+    DAG to classify local files and SharePoint URLs into agent assignments.
     """
-
-    @task.agent(agent=classifier_pydantic_agent)
-    def classify_document(input_path: str) -> List[dict]:
-        """
-        Classify a document or URL to one or more agents based on the system prompt.
-        Args:
-            input_path: Path to a local file or a SharePoint URL.
-        Returns:
-            List of dicts with agent name and path/URL.
-        """
-        result = classifier_pydantic_agent.run(input_path)
-        return [assignment.model_dump() for assignment in result]
-
-    @task
-    def show_classifications(classifications: List[List[dict]]):
-        """
-        Display and log classification results.
-        Args:
-            classifications: List of lists of dicts.
-        Returns:
-            Flattened list of dicts.
-        """
-        logging.info("------ Classification Results ------")
-        flattened = [assignment for sublist in classifications for assignment in sublist]
-        for assignment in flattened:
-            logging.info(f"Agent: {assignment['agent']}, Path: {assignment['path']}")
-        logging.info("------ End of Classification Results ------")
-        return flattened
-
-    # Example inputs (local files and SharePoint URLs)
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
         "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C",
-        "/path/to/example.eml",
-        "/path/to/message.msg",
-        "/path/to/transcript.vtt",
-        "/path/to/image.jpg",
-        "/path/to/unknown.xyz"
     ]
+    # Map classification over each input
+    assignments_mapped = classify_document.expand(input_path=inputs)
+    # assignments_mapped is a list (one element per input), each element is a list of assignments.
+    # Flatten the mapped assignments.
+    flattened = flatten_assignments(assignments_mapped)
+    # Dynamically map task to process each assignment in the flattened list.
+    processed = process_assignment.expand(assignment=flattened)
+    aggregate_results(processed)
 
-    # Classify each input and show results
-    classifications = classify_document.expand(input_path=inputs)
-    show_classifications(classifications)
-
-# Instantiate the DAG
-document_classifier_dag = document_classifier()
+doc_classifier_dag = document_classifier()
