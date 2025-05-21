@@ -1,6 +1,5 @@
 from airflow import DAG
 from airflow.decorators import task
-from airflow.hooks.base import BaseHook
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Literal, List
@@ -8,17 +7,20 @@ from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.client_credential import ClientCredential
 from office365.runtime.client_request_exception import ClientRequestException
 import os
+from dotenv import load_dotenv
 import PyPDF2
 from docx import Document
 from pptx import Presentation
 import eml_parser
 from pdf2image import convert_from_path
 import io
-import json
 import logging
 
 # Configure logging
 logging.basicConfig(filename="document_router.log", level=logging.INFO)
+
+# Load .env file
+load_dotenv()
 
 # Pydantic model for document assignment
 class DocumentAssignment(BaseModel):
@@ -42,16 +44,16 @@ def route_documents() -> List[DocumentAssignment]:
         "https://your-tenant.sharepoint.com/sites/your-site/_api/web/GetFileByServerRelativeUrl('/sites/your-site/Shared%20Documents/document2.docx')"
     ]
 
-    # Get SharePoint credentials from Airflow Connection
+    # Get SharePoint credentials from .env
     try:
-        conn = BaseHook.get_connection("sharepoint_conn")
-        credentials = json.loads(conn.extra)
-        client_id = credentials["client_id"]
-        client_secret = credentials["client_secret"]
-        tenant_id = credentials["tenant_id"]
+        client_id = os.getenv("SHAREPOINT_CLIENT_ID")
+        client_secret = os.getenv("SHAREPOINT_CLIENT_SECRET")
+        tenant_id = os.getenv("SHAREPOINT_TENANT_ID")
+        if not all([client_id, client_secret, tenant_id]):
+            raise ValueError("Missing SharePoint credentials in .env file")
         site_url = "https://your-tenant.sharepoint.com/sites/your-site"
     except Exception as e:
-        logging.error(f"Failed to load SharePoint credentials: {str(e)}")
+        logging.error(f"Failed to load SharePoint credentials from .env: {str(e)}")
         raise
 
     def validate_source(source: str) -> bool:
