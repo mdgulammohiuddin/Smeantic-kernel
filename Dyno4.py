@@ -10,6 +10,7 @@ from airflow.utils.log.logging_mixin import LoggingMixin
 from pdf2image import convert_from_path
 from pptx import Presentation
 from openpyxl import load_workbook
+import json
 
 # Load environment variables
 load_dotenv()
@@ -21,7 +22,7 @@ os.environ["OPENAI_API_KEY"] = api_key
 # Logger
 logger = LoggingMixin().log
 
-# Helper function
+# Tool function
 def detect_images_in_document(path: str) -> bool:
     try:
         ext = os.path.splitext(path)[1].lower()
@@ -39,7 +40,7 @@ def detect_images_in_document(path: str) -> bool:
         logger.error(f"Error detecting images in {path}: {e}")
         return False
 
-# Classification model (optional, not enforced in this version)
+# Pydantic model for classification output
 class Classification(BaseModel):
     agent: str
     path: str
@@ -49,28 +50,24 @@ SYSTEM_PROMPT = """
 You are a document classifier. Based on the input path (file path or URL), classify which agents should process the document.
 
 - For '.pdf', '.pptx', '.xlsx': always classify as 'File Parsing Agent'
-- If detect_images_in_document(path) returns true, also classify as 'Image Processing Agent'
-- For '.eml', '.msg': classify as 'Email Agent'
-- For those same files, also add 'Image Processing Agent' if detect_images_in_document returns true
+- For those same files('.pdf', '.pptx', '.xlsx'), if detect_images_in_document returns true, also classify as 'Image Processing Agent'
+- For '.eml', '.msg': classify as 'Email Agent',
+- For those same files('.eml', '.msg'), if detect_images_in_document returns true, also classify as 'Image Processing Agent'
 - For '.vtt', '.txt': classify as 'Transcript Agent'
 - For image extensions ('.jpg', '.png', '.gif'): classify as 'Image Processing Agent'
 - For unknown or no extension: default to 'File Parsing Agent'
 - If the path is a SharePoint URL (starts with 'http'), assume it may contain images
 
-Return **only valid JSON**, like:
-[
-  {"agent": "File Parsing Agent", "path": "<input>"},
-  {"agent": "Image Processing Agent", "path": "<input>"}
-]
-No explanations. Do not add markdown or code blocks.
+Always return a list of classification objects like:
+[{"agent": "File Parsing Agent", "path": "<input>"}, {"agent": "Image Processing Agent", "path": "<input>"}]
 """
 
-# Agent with safe JSON parsing
+# Initialize Pydantic AI Agent
 document_classifier_agent = PydanticAIAgent(
     model="gpt-4o",
     system_prompt=SYSTEM_PROMPT,
     tools=[detect_images_in_document],
-    output_parser="json",  # Safer than output_model when model might add explanations
+    output_model=List[Classification],
 )
 
 @dag(
@@ -82,16 +79,27 @@ document_classifier_agent = PydanticAIAgent(
 )
 def doc_classifier_dag():
 
-    @task.agent(agent=document_classifier_agent)
+    @task
     def classify(input_path: str) -> List[Dict[str, Any]]:
         logger.info(f"Running classifier for: {input_path}")
         result = document_classifier_agent.run_sync(input_path)
+
+        raw_output = result.output.strip()
+        logger.info(f"Raw output: {raw_output}")
+
+        # Clean ```json code blocks if present
+        if raw_output.startswith("```"):
+            raw_output = raw_output.strip("`")
+            if raw_output.lower().startswith("json"):
+                raw_output = raw_output.split("\n", 1)[-1]
+
         try:
-            data = result.data  # Already parsed JSON
-            logger.info(f"Agent JSON Output: {data}")
+            data = json.loads(raw_output)
+            logger.info(f"Parsed output: {data}")
         except Exception as e:
             logger.error(f"Failed to parse agent output: {e}")
             raise
+
         return data
 
     @task
@@ -100,7 +108,7 @@ def doc_classifier_dag():
 
     @task
     def process(assignment: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"Processing assignment: Agent={assignment['agent']}, Path={assignment['path']}")
+        logger.info(f"Assignment: Agent={assignment['agent']}, Path={assignment['path']}")
         return {**assignment, "status": "processed"}
 
     @task
@@ -121,5 +129,4 @@ def doc_classifier_dag():
     processed = process.expand(assignment=flat)
     summarize(processed)
 
-# Define DAG
 doc_classifier_dag = doc_classifier_dag()
