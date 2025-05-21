@@ -11,6 +11,7 @@ import logging
 logging.basicConfig(filename="document_router.log", level=logging.DEBUG)
 logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
 logging.getLogger('openai').setLevel(logging.DEBUG)
+logging.getLogger('airflow').setLevel(logging.DEBUG)
 logging.getLogger('airflow_ai_sdk').setLevel(logging.DEBUG)
 
 # Load .env file and set OpenAI API key
@@ -56,8 +57,8 @@ def document_classifier():
     DAG to classify local files and SharePoint URLs into agents using Airflow AI SDK.
     """
 
-    # Task to classify documents using @task.agent without tools
-    @task.agent(model="gpt-4o", result_type=List[Assignment], system_prompt=system_prompt)
+    # Task to classify documents using @task.llm (replacing @task.agent)
+    @task.llm(model="gpt-4o", result_type=List[Assignment], system_prompt=system_prompt)
     def classify_document(input_path: str) -> List[Assignment]:
         """
         Classify a document or URL to one or more agents based on the system prompt.
@@ -67,6 +68,23 @@ def document_classifier():
             List of Assignment objects with agent name and path/URL.
         """
         pass
+
+    # Task to display classification results, inspired by reference code
+    @task
+    def show_classifications(classifications: List[List[Assignment]]):
+        """
+        Display and log classification results.
+        Args:
+            classifications: List of lists of Assignment objects.
+        Returns:
+            Flattened list of assignments.
+        """
+        logging.info("------ Classification Results ------")
+        flattened = [assignment for sublist in classifications for assignment in sublist]
+        for assignment in flattened:
+            logging.info(f"Agent: {assignment.agent}, Path: {assignment.path}")
+        logging.info("------ End of Classification Results ------")
+        return flattened
 
     # Example inputs (local files and SharePoint URLs)
     inputs = [
@@ -79,8 +97,9 @@ def document_classifier():
         "/path/to/unknown.xyz"
     ]
 
-    # Classify each input using dynamic task mapping
+    # Classify each input and show results
     classifications = classify_document.expand(input_path=inputs)
+    show_classifications(classifications)
 
 # Instantiate the DAG
 document_classifier_dag = document_classifier()
