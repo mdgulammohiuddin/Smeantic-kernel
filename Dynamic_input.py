@@ -1,16 +1,17 @@
 import os
 from typing import List
 from airflow import DAG
-from airflow.decorators import task
+from airflow.decorators import dag, task
 from datetime import datetime
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 import logging
 
-# Configure logging
+# Configure logging, inspired by reference code
 logging.basicConfig(filename="document_router.log", level=logging.DEBUG)
 logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
 logging.getLogger('openai').setLevel(logging.DEBUG)
+logging.getLogger('airflow_ai_sdk').setLevel(logging.DEBUG)
 
 # Load .env file and set OpenAI API key
 load_dotenv()
@@ -44,26 +45,29 @@ For inputs that match multiple criteria (e.g., '.pptx' for both 'File Parsing Ag
 Return a list of JSON objects, each with 'agent' and 'path' fields, e.g., [{'agent': 'File Parsing Agent', 'path': '/path/to/file.pptx'}, {'agent': 'Image Processing Agent', 'path': '/path/to/file.pptx'}]
 """
 
-# Task to classify documents using @task.agent without tools
-@task.agent(model="gpt-4o", result_type=List[Assignment], system_prompt=system_prompt)
-def classify_document(input_path: str) -> List[Assignment]:
-    """
-    Classify a document or URL to one or more agents based on the system prompt.
-    Args:
-        input_path: Path to a local file or a SharePoint URL.
-    Returns:
-        List of Assignment objects with agent name and path/URL.
-    """
-    pass
-
-# DAG definition
-with DAG(
-    dag_id="document_classifier",
+@dag(
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=['document_classification', 'airflow-ai-sdk', 'pydantic-ai'],
-):
+)
+def document_classifier():
+    """
+    DAG to classify local files and SharePoint URLs into agents using Airflow AI SDK.
+    """
+
+    # Task to classify documents using @task.agent without tools
+    @task.agent(model="gpt-4o", result_type=List[Assignment], system_prompt=system_prompt)
+    def classify_document(input_path: str) -> List[Assignment]:
+        """
+        Classify a document or URL to one or more agents based on the system prompt.
+        Args:
+            input_path: Path to a local file or a SharePoint URL.
+        Returns:
+            List of Assignment objects with agent name and path/URL.
+        """
+        pass
+
     # Example inputs (local files and SharePoint URLs)
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
@@ -77,3 +81,6 @@ with DAG(
 
     # Classify each input using dynamic task mapping
     classifications = classify_document.expand(input_path=inputs)
+
+# Instantiate the DAG
+document_classifier_dag = document_classifier()
