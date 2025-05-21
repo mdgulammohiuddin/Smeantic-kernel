@@ -7,12 +7,23 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent as PydanticAIAgent
 from dotenv import load_dotenv
 import logging
+import sys
+from airflow.utils.log.logging_mixin import LoggingMixin
 from pdf2image import convert_from_path
 from pptx import Presentation
 from openpyxl import load_workbook
 
-# Configure logging
-logging.basicConfig(filename="document_router.log", level=logging.DEBUG)
+# Configure logging for Airflow UI and file
+logger = logging.getLogger('airflow.task')
+logger.setLevel(logging.DEBUG)
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setLevel(logging.DEBUG)
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(stream_handler)
+file_handler = logging.FileHandler('/app/fdi/airflow/logs/document_router.log')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
 logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
 logging.getLogger('openai').setLevel(logging.DEBUG)
 logging.getLogger('airflow').setLevel(logging.DEBUG)
@@ -23,7 +34,7 @@ api_key = os.getenv("OPENAI_API_KEY")
 if api_key:
     os.environ["OPENAI_API_KEY"] = api_key
 else:
-    logging.error("OPENAI_API_KEY not found in environment variables")
+    logger.error("OPENAI_API_KEY not found in environment variables")
     raise ValueError("OPENAI_API_KEY is required")
 
 # Pydantic model for assignment output
@@ -56,7 +67,7 @@ def detect_images_in_document(file_path: str) -> bool:
             return False
         return False
     except Exception as e:
-        logging.error(f"Error detecting images in {file_path}: {e}")
+        logger.error(f"Error detecting images in {file_path}: {e}")
         return False
 
 # Define the system prompt for document classification
@@ -107,7 +118,9 @@ def document_classifier():
         """
         Classify a document or URL into one or more agent assignments.
         """
+        logger.debug(f"Classifying input: {input_path}")
         result = document_classifier_agent.run_sync(input_path)
+        logger.debug(f"Agent output: {[r.model_dump() for r in result]}")
         return [assignment.model_dump() for assignment in result]
 
     @task
@@ -125,7 +138,7 @@ def document_classifier():
         """
         Process a single assignment.
         """
-        logging.info(f"Processing assignment - Agent: {assignment['agent']}, Path: {assignment['path']}")
+        logger.info(f"Processing assignment - Agent: {assignment['agent']}, Path: {assignment['path']}")
         return {
             "agent": assignment['agent'],
             "path": assignment['path'],
@@ -137,21 +150,18 @@ def document_classifier():
         """
         Aggregate and log all processing results.
         """
-        logging.info("------ Processing Results ------")
+        logger.info("------ Processing Results ------")
         for result in results:
-            logging.info(f"Agent: {result['agent']}, Path: {result['path']}, Status: {result['status']}")
-        logging.info("------ End of Results ------")
+            logger.info(f"Agent: {result['agent']}, Path: {result['path']}, Status: {result['status']}")
+        logger.info("------ End of Results ------")
         return results
 
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
         "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C",
     ]
-    # Map classification over each input
     assignments_mapped = classify_document.expand(input_path=inputs)
-    # Flatten the mapped assignments
     flattened = flatten_assignments(assignments_mapped)
-    # Process each assignment
     processed = process_assignment.expand(assignment=flattened)
     aggregate_results(processed)
 
