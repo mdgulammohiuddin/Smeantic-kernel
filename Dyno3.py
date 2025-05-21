@@ -21,11 +21,6 @@ os.environ["OPENAI_API_KEY"] = api_key
 # Logger
 logger = LoggingMixin().log
 
-# Model to structure the output
-class ClassificationResult(BaseModel):
-    agent: str = Field(description="Target agent name")
-    path: str = Field(description="Input file or URL")
-
 # Tool function
 def detect_images_in_document(path: str) -> bool:
     try:
@@ -44,7 +39,7 @@ def detect_images_in_document(path: str) -> bool:
         logger.error(f"Error detecting images in {path}: {e}")
         return False
 
-# System prompt for agent
+# System prompt
 SYSTEM_PROMPT = """
 You are a document classifier. Based on the input path (file path or URL), classify which agents should process the document.
 
@@ -60,12 +55,11 @@ Always return a list of classification objects like:
 [{"agent": "File Parsing Agent", "path": "<input>"}, {"agent": "Image Processing Agent", "path": "<input>"}]
 """
 
-# AI agent for classification
+# Initialize Pydantic AI Agent (no output_model)
 document_classifier_agent = PydanticAIAgent(
     model="gpt-4o",
     system_prompt=SYSTEM_PROMPT,
     tools=[detect_images_in_document],
-    output_model=List[ClassificationResult],
 )
 
 @dag(
@@ -80,8 +74,7 @@ def document_classifier():
     @task.agent(agent=document_classifier_agent)
     def classify(input_path: str) -> List[Dict[str, Any]]:
         logger.info(f"Running classifier for: {input_path}")
-        results = document_classifier_agent.run_sync(input_path)
-        return [res.model_dump() for res in results]
+        return document_classifier_agent.run_sync(input_path)
 
     @task
     def flatten(results: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
@@ -99,7 +92,7 @@ def document_classifier():
             logger.info(result)
         return results
 
-    # Input documents/URLs
+    # Inputs
     inputs = [
         "/app/fdi/Documents/FRD.pptx",
         "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/example",
