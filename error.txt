@@ -1,20 +1,23 @@
- Task failed with exception: source="task"
-TypeError: cannot serialize object of type <class 'unusual_prefix_6ec3b53a6b0916bc53ee6610935b61398bf65f89_dynamic_input_agent.Assignment'>
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 849 in run
+Task failed with exception: source="task"
+TypeError: 'coroutine' object is not iterable
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1193 in _push_xcom_if_needed
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 526 in _xcom_push
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/xcom.py", line 64 in set
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/agent.py", line 44 in execute
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/xcom.py", line 283 in serialize_value
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/serialization/serde.py", line 129 in serialize
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/decorator.py", line 251 in execute
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/serialization/serde.py", line 185 in serialize
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
-[2025-05-21, 16:01:12] INFO - Task instance in failure state: chan="stdout": source="task"
-[2025-05-21, 16:01:12] INFO - Task start: chan="stdout": source="task"
-[2025-05-21, 16:01:12] INFO - Task:<Task(AgentDecoratedOperator): classify_document>: chan="stdout": source="task"
-[2025-05-21, 16:01:12] INFO - Failure caused by cannot serialize object of type <class 'unusual_prefix_6ec3b53a6b0916bc53ee6610935b61398bf65f89_dynamic_input_agent.Assignment'>: chan="stdout": source="task"
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/providers/standard/operators/python.py", line 216 in execute
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/providers/standard/operators/python.py", line 239 in execute_callable
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/callback_runner.py", line 81 in run
+
+File "/app/fdi/dags/dynamic_input_agent.py", line 374 in classify_document
