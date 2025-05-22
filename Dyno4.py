@@ -67,7 +67,7 @@ document_classifier_agent = PydanticAIAgent(
     model="gpt-4o",
     system_prompt=SYSTEM_PROMPT,
     tools=[detect_images_in_document],
-    output_model=List[Classification],
+    
 )
 
 @dag(
@@ -84,23 +84,22 @@ def doc_classifier_dag():
         logger.info(f"Running classifier for: {input_path}")
         result = document_classifier_agent.run_sync(input_path)
 
-        raw_output = result.output.strip()
-        logger.info(f"Raw output: {raw_output}")
+        output = result.output.strip()
+        logger.info(f"Raw agent output: {output}")
 
-        # Clean ```json code blocks if present
-        if raw_output.startswith("```"):
-            raw_output = raw_output.strip("`")
-            if raw_output.lower().startswith("json"):
-                raw_output = raw_output.split("\n", 1)[-1]
+        # Clean triple backtick blocks (like ```json ... ```)
+        if output.startswith("```"):
+            output = output.strip("`")
+            if output.lower().startswith("json"):
+                output = output.split("\n", 1)[-1]
 
         try:
-            data = json.loads(raw_output)
+            data = json.loads(output)
             logger.info(f"Parsed output: {data}")
-        except Exception as e:
-            logger.error(f"Failed to parse agent output: {e}")
+            return data
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {e}")
             raise
-
-        return data
 
     @task
     def flatten(results: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
