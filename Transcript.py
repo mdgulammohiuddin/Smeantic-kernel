@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from airflow.decorators import dag, task
-from airflow.utils.dates import days_ago
+
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
 from pydantic_ai import Agent as PydanticAIAgent
@@ -62,7 +62,7 @@ default_args = {
     dag_id="transcript_summary_dag",
     default_args=default_args,
     schedule=None,
-    start_date=days_ago(1),
+    start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["transcript", "pydantic-ai", "summarization"]
 )
@@ -80,7 +80,7 @@ def transcript_summary_dag():
         return summary
 
     # Path to the transcript
-    transcript_file_path = os.path.join(ASSETS_DIR, "transcript.txt")
+    transcript_file_path = os.path.join(ASSETS_DIR, "meeting_transcript.docx")
     user_query = "What are the key points discussed in the final section?"
 
     # DAG flow
