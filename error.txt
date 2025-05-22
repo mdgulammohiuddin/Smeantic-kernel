@@ -1,31 +1,17 @@
-Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-21T18:48:16.925343+00:00/task_id=classify/map_index=1/attempt=1.log"]
-[2025-05-22, 00:18:17] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
-[2025-05-22, 00:18:17] INFO - Filling up the DagBag from /app/fdi/dags/dyno3.py: source="airflow.models.dagbag.DagBag"
-[2025-05-22, 00:18:18] INFO - Running classifier for: https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C: source="airflow.utils.log.logging_mixin.LoggingMixin"
-[2025-05-22, 00:18:18] INFO - Task instance is in running state: chan="stdout": source="task"
-[2025-05-22, 00:18:18] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
-[2025-05-22, 00:18:18] INFO - Current task name:classify: chan="stdout": source="task"
-[2025-05-22, 00:18:18] INFO - Dag name:document_classifier_dag: chan="stdout": source="task"
-[2025-05-22, 00:18:18] INFO - Executing LLM call: chan="stdout": source="task"
-[2025-05-22, 00:18:21] ERROR - Failed to parse agent output: The input path is a SharePoint URL, which may contain images. Therefore, I will classify this document path under both 'File Parsing Agent' and 'Image Processing Agent'.
-
-Here is the classification:
-
-```json
-[
-    {"agent": "File Parsing Agent", "path": "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C"},
-    {"agent": "Image Processing Agent", "path": "https://hexawareonline.sharepoint.com/:b:/t/tensaiGPT-PROD-HR-Docs/ET0W0clrClhBrA7ZLzCoOmEBHq0vg-rFuGuEwb40Weq8zQ?e=6BkU3C"}
-]
-```: source="airflow.utils.log.logging_mixin.LoggingMixin"
-[2025-05-22, 00:18:21] ERROR - Task failed with exception: source="task"
-SyntaxError: invalid syntax (<unknown>, line 1)
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-22T06:41:36.628487+00:00/task_id=classify/map_index=0/attempt=1.log"]
+::group::Log message source details: sources=["/app/fdi/airflow/logs/dag_id=document_classifier_dag/run_id=manual__2025-05-22T06:41:36.628487+00:00/task_id=classify/map_index=0/attempt=1.log"]
+[2025-05-22, 12:11:37] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-22, 12:11:37] INFO - Filling up the DagBag from /app/fdi/dags/dynamic_input_agent.py: source="airflow.models.dagbag.DagBag"
+[2025-05-22, 12:11:38] INFO - Running classifier for: /app/fdi/Documents/FRD.pptx: source="airflow.utils.log.logging_mixin.LoggingMixin"
+[2025-05-22, 12:11:38] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-22, 12:11:38] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-22, 12:11:38] INFO - Current task name:classify: chan="stdout": source="task"
+[2025-05-22, 12:11:38] INFO - Dag name:document_classifier_dag: chan="stdout": source="task"
+[2025-05-22, 12:11:39] ERROR - Task failed with exception: source="task"
+AttributeError: 'AgentRunResult' object has no attribute 'output'
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
-
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
-
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/agent.py", line 44 in execute
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
@@ -39,22 +25,9 @@ File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/providers/standard/
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/callback_runner.py", line 81 in run
 
-File "/app/fdi/dags/dyno3.py", line 87 in classify
+File "/app/fdi/dags/dynamic_input_agent.py", line 87 in classify
 
-File "/usr/lib/python3.12/ast.py", line 66 in literal_eval
-
-File "/usr/lib/python3.12/ast.py", line 52 in parse
-
-JSONDecodeError: Expecting value: line 1 column 1 (char 0)
-File "/app/fdi/dags/dyno3.py", line 84 in classify
-
-File "/usr/lib/python3.12/json/__init__.py", line 346 in loads
-
-File "/usr/lib/python3.12/json/decoder.py", line 337 in decode
-
-File "/usr/lib/python3.12/json/decoder.py", line 355 in raw_decode
-
-[2025-05-22, 00:18:21] INFO - Task instance in failure state: chan="stdout": source="task"
-[2025-05-22, 00:18:21] INFO - Task start: chan="stdout": source="task"
-[2025-05-22, 00:18:21] INFO - Task:<Task(AgentDecoratedOperator): classify>: chan="stdout": source="task"
-[2025-05-22, 00:18:21] INFO - Failure caused by invalid syntax (<unknown>, line 1): chan="stdout": source="task"
+[2025-05-22, 12:11:39] INFO - Task instance in failure state: chan="stdout": source="task"
+[2025-05-22, 12:11:39] INFO - Task start: chan="stdout": source="task"
+[2025-05-22, 12:11:39] INFO - Task:<Task(_PythonDecoratedOperator): classify>: chan="stdout": source="task"
+[2025-05-22, 12:11:39] INFO - Failure caused by 'AgentRunResult' object has no attribute 'output': chan="stdout": source="task"
