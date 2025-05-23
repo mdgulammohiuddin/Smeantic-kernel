@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from unstructured.partition.auto import partition
 from pydantic_ai import Agent as PydanticAIAgent
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -19,51 +19,70 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set")
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
-# Define assets directory
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 
-# 1. Tool function from code 1
-def parse_document_with_unstructured(file_url: str) -> str:
-    """Modified from code 1 to handle different file types"""
+# --------- Tool 1: Document Parser ---------
+def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
+    """Parse document and return content with metadata"""
     try:
-        actual_file_path = file_url
-        if not os.path.isabs(file_url) and not file_url.startswith(("http://", "https://")):
-            path_in_assets = os.path.join(ASSETS_DIR, file_url)
-            if os.path.exists(path_in_assets):
-                actual_file_path = path_in_assets
-            elif os.path.exists(file_url):
-                actual_file_path = os.path.abspath(file_url)
-            else:
-                return f"Error: File not found. Checked paths related to: {file_url}"
+        start_time = time.time()
         
-        if not os.path.exists(actual_file_path) and not actual_file_path.startswith(("http://", "https://")):
-             return f"Error: File not found at resolved path: {actual_file_path}"
-
-        elements = partition(filename=actual_file_path)
-        return "\n\n".join([str(element) for element in elements])
+        if not os.path.exists(file_path):
+            return f"Error: File not found at {file_path}", {}
+        
+        elements = partition(filename=file_path)
+        content = "\n\n".join([str(e) for e in elements])
+        
+        return content, {
+            "parse_time": time.time() - start_time,
+            "file_size": os.path.getsize(file_path),
+            "file_type": os.path.splitext(file_path)[1][1:].upper()
+        }
     except Exception as e:
-        return f"An error occurred during parsing: {e}"
+        return f"Parsing error: {str(e)}", {}
 
-# 2. Define Pydantic AI agent with tool
+# --------- Tool 2: Content Cleaner ---------
+def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
+    """Clean parsed content and return with metrics"""
+    try:
+        start_time = time.time()
+        
+        # Basic cleaning operations
+        cleaned = "\n".join([
+            line.strip() 
+            for line in raw_content.split("\n") 
+            if line.strip()
+        ])
+        
+        return cleaned, {
+            "clean_time": time.time() - start_time,
+            "original_length": len(raw_content),
+            "cleaned_length": len(cleaned)
+        }
+    except Exception as e:
+        return f"Cleaning error: {str(e)}", {}
+
+# --------- Agent Configuration ---------
 document_agent = PydanticAIAgent(
     model="gpt-4o",
-    tools=[parse_document_with_unstructured],
+    tools=[parse_document, clean_content],
     system_prompt="""
-You are a document processing expert. Process input formatted as:
-User Query: [query]
-File Path: [path]
+You are an advanced document processing system. Follow these steps:
 
-1. Extract and validate file path
-2. Use parse_document_with_unstructured to get content
-3. Analyze content against query
-4. Return structured response with:
-   - Relevant information matching query
+1. Use parse_document with the file path to get raw content
+2. Use clean_content on the raw output to refine it
+3. Analyze cleaned content against the user query
+4. Return structured response containing:
+   - Query-relevant information
    - File metadata (type, size)
-   - Processing timestamps
-Format: Markdown with sections for data and metrics
+   - Processing times for each stage
+   - Content length metrics
+
+Format response in Markdown with sections for data and metrics
 """
 )
 
+# --------- DAG Definition ---------
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
@@ -74,85 +93,80 @@ default_args = {
 }
 
 @dag(
-    dag_id="enhanced_document_processor",
+    dag_id="document_processing_pipeline",
     default_args=default_args,
     schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=["document", "pydantic-ai", "metrics"],
+    tags=["document", "ai-agent", "metrics"],
     params={
-        "file_name": "KB_0000268.pdf",
-        "user_query": "What are the key points in this document?"
+        "file_name": "meeting_transcript.docx",
+        "user_query": "List all action items from the document"
     }
 )
-def enhanced_document_dag():
+def document_pipeline():
 
     @task
-    def get_file_metadata(file_name: str) -> Dict[str, Any]:
-        """Collect initial file metadata"""
+    def prepare_context(**kwargs) -> Dict[str, Any]:
+        """Collect initial context and validate file"""
+        params = kwargs.get('params', {})
+        file_name = params.get('file_name')
+        user_query = params.get('user_query')
+        
         file_path = os.path.join(ASSETS_DIR, file_name)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File {file_path} not found")
-        
+            
         return {
             "file_path": file_path,
-            "file_size": os.path.getsize(file_path),
-            "file_type": os.path.splitext(file_name)[1].lstrip('.'),
-            "start_time": datetime.utcnow().isoformat()
+            "user_query": user_query,
+            "process_start": datetime.utcnow().isoformat()
         }
 
     @task.agent(agent=document_agent)
-    def parse_with_agent(metadata: Dict[str, Any], user_query: str) -> str:
-        """Agent task for parsing and initial processing"""
-        return f"User Query: {user_query}\nFile Path: {metadata['file_path']}"
+    def process_document(context: Dict[str, Any]) -> Dict[str, Any]:
+        """Agent-controlled processing pipeline"""
+        return f"""
+        User Query: {context['user_query']}
+        File Path: {context['file_path']}
+        """
 
     @task
-    def process_results(parsed_output: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Process agent output and collect metrics"""
-        end_time = datetime.utcnow()
-        return {
-            "content": parsed_output,
-            "metrics": {
-                "file_size": metadata["file_size"],
-                "file_type": metadata["file_type"],
-                "processing_time": (datetime.fromisoformat(end_time) - 
-                                  datetime.fromisoformat(metadata["start_time"])).total_seconds(),
-                "stages": {
-                    "parsing_start": metadata["start_time"],
-                    "processing_end": end_time.isoformat()
-                }
-            }
-        }
-
-    @task
-    def final_output(result: Dict[str, Any]) -> str:
-        """Format final output with metrics"""
+    def format_final_output(result: Dict[str, Any], context: Dict[str, Any]) -> str:
+        """Generate final formatted output with all metrics"""
+        metrics = result.get('metrics', {})
+        content = result.get('content', '')
+        
         output = f"""
 ## Document Processing Report
 
-### File Information
-- Type: {result['metrics']['file_type'].upper()}
-- Size: {result['metrics']['file_size']/1024:.2f} KB
+### File Metadata
+- Type: {metrics.get('file_type', 'N/A')}
+- Size: {metrics.get('file_size', 0)/1024:.2f} KB
+- Source: {os.path.basename(context['file_path'])}
 
 ### Processing Metrics
-- Total Time: {result['metrics']['processing_time']:.2f} seconds
-- Parsing Started: {result['metrics']['stages']['parsing_start']}
-- Processing Completed: {result['metrics']['stages']['processing_end']}
+- Total Time: {metrics.get('total_time', 0):.2f}s
+  - Parsing: {metrics.get('parse_time', 0):.2f}s 
+  - Cleaning: {metrics.get('clean_time', 0):.2f}s
+- Content Length:
+  - Original: {metrics.get('original_length', 0)} chars
+  - Cleaned: {metrics.get('cleaned_length', 0)} chars
 
-### Extracted Content
-{result['content']}
+### Query Results
+{content}
+
+### Timeline
+- Started: {context['process_start']}
+- Completed: {datetime.utcnow().isoformat()}
         """
         print(output)
         return output
 
     # DAG execution flow
-    file_name = "{{ params.file_name }}"
-    user_query = "{{ params.user_query }}"
-    
-    metadata = get_file_metadata(file_name)
-    parsed = parse_with_agent(metadata, user_query)
-    processed = process_results(parsed, metadata)
-    final_output(processed)
+    context = prepare_context()
+    agent_result = process_document(context)
+    final_output = format_final_output(agent_result, context)
 
 # Instantiate DAG
-enhanced_dag = enhanced_document_dag()
+document_pipeline_dag = document_pipeline()
