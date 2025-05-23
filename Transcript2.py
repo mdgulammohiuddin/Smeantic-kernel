@@ -1,18 +1,28 @@
 import os
 import time
 from datetime import datetime, timedelta, timezone
-import json 
+import json
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
-from pydantic_ai import Agent as PydanticAIAgent 
+from pydantic_ai import Agent as PydanticAIAgent
 import logging
 from typing import Dict, Any, Tuple, Optional
-from pydantic import BaseModel, Field 
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
+# Download required NLTK data (only runs if not already downloaded)
+try:
+    nltk.data.find('corpora/stopwords')
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('stopwords')
+    nltk.download('punkt')
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -22,10 +32,7 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 
-
-
-
-class AgentOutputMetricsStructure: 
+class AgentOutputMetricsStructure:
     file_type: Optional[str] = None
     file_size: Optional[int] = None
     parse_time: Optional[float] = None
@@ -39,7 +46,6 @@ class AgentOutputMetricsStructure:
 class AgentOutputStructure:
     content: str
     metrics: AgentOutputMetricsStructure
-
 
 def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
     """Parse document and return content with metadata"""
@@ -68,17 +74,38 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
             "parse_start": current_utc_time
         }
 
-
 def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
-    """Clean parsed content and return with metrics"""
+    """Clean parsed content using NLTK for stopword removal and additional cleaning steps, return with metrics"""
     start_time_func = time.time()
     current_utc_time = datetime.now(timezone.utc).isoformat()
     try:
-        cleaned = "\n".join([
-            line.strip()
-            for line in raw_content.split("\n")
-            if line.strip() and not line.startswith(("Â", "�"))
-        ])
+        # Step 1: Remove timestamps (e.g., 12:34:56, 12:34, or HH:MM:SS.mmm formats)
+        timestamp_pattern = r'\b\d{1,2}:\d{2}(:\d{2})?(\.\d{1,3})?\b'
+        content = re.sub(timestamp_pattern, '', raw_content)
+
+        # Step 2: Remove special characters and punctuation, keep alphanumeric and spaces
+        content = re.sub(r'[^\w\s]', '', content)
+
+        # Step 3: Normalize whitespace (replace multiple spaces/tabs/newlines with single space)
+        content = re.sub(r'\s+', ' ', content).strip()
+
+        # Step 4: Tokenize and remove stopwords and filler words
+        stop_words = set(stopwords.words('english'))
+        # Define common filler words (extend as needed)
+        filler_words = {
+            'um', 'uh', 'like', 'you know', 'so', 'actually', 'basically',
+            'i mean', 'kind of', 'sort of', 'well', 'okay'
+        }
+        # Combine stopwords and filler words
+        words_to_remove = stop_words.union(filler_words)
+
+        # Tokenize the content
+        tokens = word_tokenize(content.lower())  # Convert to lowercase for consistency
+        filtered_tokens = [word for word in tokens if word not in words_to_remove]
+
+        # Reconstruct cleaned content
+        cleaned = ' '.join(filtered_tokens)
+
         return cleaned, {
             "clean_time": time.time() - start_time_func,
             "original_length": len(raw_content),
@@ -93,8 +120,7 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
             "clean_start": current_utc_time
         }
 
-
-document_agent = PydanticAIAgent( 
+document_agent = PydanticAIAgent(
     model="gpt-4o",
     tools=[parse_document, clean_content],
     system_prompt="""
@@ -119,10 +145,10 @@ The "metrics" key should contain an object with the following fields:
   "error_message": (string, describe any error that occurred during parsing or cleaning, or null if no errors)
 
 Follow these steps strictly:
-1.  Use `parse_document` with the file path. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 2 if parsing fails critically.
-2.  If parsing is successful, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for other clean-related metric fields.
-3.  If cleaning is successful, analyze cleaned content against the user query for "content".
-4.  Construct the final JSON object string as described above.
+1. Use `parse_document` with the file path. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 2 if parsing fails critically.
+2. If parsing is successful, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for other clean-related metric fields.
+3. If cleaning is successful, analyze cleaned content against the user query for "content".
+4. Construct the final JSON object string as described above.
 
 Tool usage sequence (if successful): parse_document -> clean_content -> analysis.
 Ensure your output is ONLY the JSON string. Example of output format:
@@ -143,7 +169,6 @@ Ensure your output is ONLY the JSON string. Example of output format:
 """
 )
 
-
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
@@ -154,7 +179,7 @@ default_args = {
 }
 
 @dag(
-    dag_id="transcript_processor", 
+    dag_id="transcript_processor",
     default_args=default_args,
     schedule=None,
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
@@ -166,7 +191,6 @@ default_args = {
     }
 )
 def transcript_pipeline():
-
     @task
     def prepare_context(**kwargs) -> Dict[str, Any]:
         params = kwargs.get('params', {})
@@ -179,7 +203,7 @@ def transcript_pipeline():
         }
 
     @task.agent(agent=document_agent)
-    def process_document_get_json(context: Dict[str, Any]) -> str: 
+    def process_document_get_json(context: Dict[str, Any]) -> str:
         """Agent task that returns a JSON string."""
         return f"""
         User Query: {context['user_query']}
@@ -195,11 +219,10 @@ def transcript_pipeline():
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON from agent: {e}")
             logger.error(f"Received string: {json_string}")
-            
             return {
                 "content": "Error: Agent returned malformed JSON.",
                 "metrics": {
-                    "error_message": f"JSONDecodeError: {e}. Received: {json_string[:200]}..." # Truncate long strings
+                    "error_message": f"JSONDecodeError: {e}. Received: {json_string[:200]}..."
                 }
             }
 
@@ -208,26 +231,19 @@ def transcript_pipeline():
         """Generate final output from the parsed dictionary."""
         agent_content = result_dict.get('content', 'No relevant information found or error in processing.')
         metrics_data = result_dict.get('metrics', {})
-
         file_size_kb_str = "N/A"
         file_size_bytes = metrics_data.get('file_size')
         if isinstance(file_size_bytes, (int, float)):
             file_size_kb_str = f"{file_size_bytes / 1024:.2f} KB"
-        elif file_size_bytes is not None: # If it's some other non-numeric type
+        elif file_size_bytes is not None:
             file_size_kb_str = "Invalid Size Data"
-            
-        # Ensure float formatting for times, handle None gracefully
         parse_time_str = f"{metrics_data.get('parse_time'):.2f}s" if metrics_data.get('parse_time') is not None else "N/A"
         clean_time_str = f"{metrics_data.get('clean_time'):.2f}s" if metrics_data.get('clean_time') is not None else "N/A"
-
-
         reduction_str = "N/A"
         original_len = metrics_data.get('original_length')
         cleaned_len = metrics_data.get('cleaned_length')
         if isinstance(original_len, int) and isinstance(cleaned_len, int):
             reduction_str = f"{original_len - cleaned_len} characters"
-
-
         output = f"""
 ## Transcript Processing Report
 
@@ -248,7 +264,7 @@ def transcript_pipeline():
    - Cleaned Length: {metrics_data.get('cleaned_length', 'N/A')} characters
    - Content Reduction: {reduction_str}
 
-{f"### Errors during Processing- {metrics_data.get('error_message')}" if metrics_data.get('error_message') else "No errors reported by agent."}
+{f"### Errors during Processing\n- {metrics_data.get('error_message')}" if metrics_data.get('error_message') else "No errors reported by agent."}
 
 ### Analysis Results
 {agent_content}
