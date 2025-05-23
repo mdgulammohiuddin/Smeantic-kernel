@@ -1,19 +1,19 @@
 import os
 import time
 from datetime import datetime, timedelta, timezone
-import json # Import the json library
+import json 
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
-from pydantic_ai import Agent as PydanticAIAgent # Using the user's specified import
+from pydantic_ai import Agent as PydanticAIAgent 
 import logging
 from typing import Dict, Any, Tuple, Optional
+from pydantic import BaseModel, Field 
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
@@ -22,11 +22,10 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 
-# --------- Pydantic Models (for defining JSON structure) ---------
-# These are not passed to the agent directly but used to define the JSON structure in the prompt.
-from pydantic import BaseModel, Field # Keep these for schema reference if needed, or just describe in prompt
 
-class AgentOutputMetricsStructure: # Using a plain class/dict for prompt description
+
+
+class AgentOutputMetricsStructure: 
     file_type: Optional[str] = None
     file_size: Optional[int] = None
     parse_time: Optional[float] = None
@@ -41,7 +40,7 @@ class AgentOutputStructure:
     content: str
     metrics: AgentOutputMetricsStructure
 
-# --------- Tool 1: Document Parser ---------
+
 def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
     """Parse document and return content with metadata"""
     start_time_func = time.time()
@@ -69,7 +68,7 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
             "parse_start": current_utc_time
         }
 
-# --------- Tool 2: Content Cleaner ---------
+
 def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
     """Clean parsed content and return with metrics"""
     start_time_func = time.time()
@@ -94,8 +93,8 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
             "clean_start": current_utc_time
         }
 
-# --------- Agent Configuration ---------
-document_agent = PydanticAIAgent( # No output_model argument here
+
+document_agent = PydanticAIAgent( 
     model="gpt-4o",
     tools=[parse_document, clean_content],
     system_prompt="""
@@ -144,7 +143,7 @@ Ensure your output is ONLY the JSON string. Example of output format:
 """
 )
 
-# --------- DAG Definition ---------
+
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
@@ -155,10 +154,10 @@ default_args = {
 }
 
 @dag(
-    dag_id="transcript_processor_v2", # New DAG ID to avoid conflicts
+    dag_id="transcript_processor", 
     default_args=default_args,
     schedule=None,
-    start_date=datetime(2023, 1, 1, tzinfo=timezone.utc), # Adjusted for testing
+    start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
     tags=["transcript", "ai-agent", "json-output"],
     params={
@@ -166,7 +165,7 @@ default_args = {
         "user_query": "List all action items from the document"
     }
 )
-def transcript_pipeline_v2():
+def transcript_pipeline():
 
     @task
     def prepare_context(**kwargs) -> Dict[str, Any]:
@@ -180,7 +179,7 @@ def transcript_pipeline_v2():
         }
 
     @task.agent(agent=document_agent)
-    def process_document_get_json(context: Dict[str, Any]) -> str: # Task now returns a string (JSON string)
+    def process_document_get_json(context: Dict[str, Any]) -> str: 
         """Agent task that returns a JSON string."""
         return f"""
         User Query: {context['user_query']}
@@ -196,7 +195,7 @@ def transcript_pipeline_v2():
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON from agent: {e}")
             logger.error(f"Received string: {json_string}")
-            # Return a default error structure if parsing fails
+            
             return {
                 "content": "Error: Agent returned malformed JSON.",
                 "metrics": {
@@ -249,8 +248,7 @@ def transcript_pipeline_v2():
    - Cleaned Length: {metrics_data.get('cleaned_length', 'N/A')} characters
    - Content Reduction: {reduction_str}
 
-{f"### Errors during Processing
-- {metrics_data.get('error_message')}" if metrics_data.get('error_message') else "No errors reported by agent."}
+{f"### Errors during Processing- {metrics_data.get('error_message')}" if metrics_data.get('error_message') else "No errors reported by agent."}
 
 ### Analysis Results
 {agent_content}
@@ -266,6 +264,7 @@ Generated at: {datetime.now(timezone.utc).isoformat()}
     agent_json_result = process_document_get_json(context_data)
     parsed_agent_result = parse_agent_json_output(agent_json_result)
     final_report = format_final_output(parsed_agent_result, context_data)
+    print(final_report)
 
 # Instantiate DAG
-transcript_processor_dag_v2 = transcript_pipeline_v2()
+transcript_processor_dag = transcript_pipeline()
