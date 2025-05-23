@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
@@ -36,7 +36,8 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
         return content, {
             "parse_time": time.time() - start_time,
             "file_size": os.path.getsize(file_path),
-            "file_type": os.path.splitext(file_path)[1][1:].upper()
+            "file_type": os.path.splitext(file_path)[1][1:].upper(),
+            "parse_start": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         return f"Parsing error: {str(e)}", {}
@@ -46,18 +47,20 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
     """Clean parsed content and return with metrics"""
     try:
         start_time = time.time()
+        clean_start = datetime.now(timezone.utc).isoformat()
         
-        # Basic cleaning operations
+        # Advanced cleaning operations
         cleaned = "\n".join([
             line.strip() 
             for line in raw_content.split("\n") 
-            if line.strip()
+            if line.strip() and not line.startswith(("Â", "�"))  # Remove special chars
         ])
         
         return cleaned, {
             "clean_time": time.time() - start_time,
             "original_length": len(raw_content),
-            "cleaned_length": len(cleaned)
+            "cleaned_length": len(cleaned),
+            "clean_start": clean_start
         }
     except Exception as e:
         return f"Cleaning error: {str(e)}", {}
@@ -67,18 +70,21 @@ document_agent = PydanticAIAgent(
     model="gpt-4o",
     tools=[parse_document, clean_content],
     system_prompt="""
-You are an advanced document processing system. Follow these steps:
+You are a transcript processing system. Follow these steps strictly:
 
-1. Use parse_document with the file path to get raw content
-2. Use clean_content on the raw output to refine it
-3. Analyze cleaned content against the user query
+1. FIRST use parse_document with the provided file path to get raw content
+2. THEN use clean_content on the raw output from step 1
+3. FINALLY analyze the cleaned content against the user query
 4. Return structured response containing:
-   - Query-relevant information
+   - Query-relevant information in bullet points
    - File metadata (type, size)
    - Processing times for each stage
    - Content length metrics
 
-Format response in Markdown with sections for data and metrics
+Tool usage sequence is MANDATORY:
+parse_document -> clean_content -> analysis
+
+NEVER repeat tools. Format response in Markdown.
 """
 )
 
@@ -93,39 +99,32 @@ default_args = {
 }
 
 @dag(
-    dag_id="document_processing_pipeline",
+    dag_id="transcript_processor",
     default_args=default_args,
     schedule=None,
-    start_date=datetime(2025, 1, 1),
+    start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
-    tags=["document", "ai-agent", "metrics"],
+    tags=["transcript", "ai-agent", "metrics"],
     params={
         "file_name": "meeting_transcript.docx",
         "user_query": "List all action items from the document"
     }
 )
-def document_pipeline():
+def transcript_pipeline():
 
     @task
     def prepare_context(**kwargs) -> Dict[str, Any]:
-        """Collect initial context and validate file"""
+        """Collect initial context with proper timezone"""
         params = kwargs.get('params', {})
-        file_name = params.get('file_name')
-        user_query = params.get('user_query')
-        
-        file_path = os.path.join(ASSETS_DIR, file_name)
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File {file_path} not found")
-            
         return {
-            "file_path": file_path,
-            "user_query": user_query,
-            "process_start": datetime.utcnow().isoformat()
+            "file_path": os.path.join(ASSETS_DIR, params.get('file_name')),
+            "user_query": params.get('user_query'),
+            "process_start": datetime.now(timezone.utc).isoformat()
         }
 
     @task.agent(agent=document_agent)
     def process_document(context: Dict[str, Any]) -> Dict[str, Any]:
-        """Agent-controlled processing pipeline"""
+        """Agent task with enforced tool sequence"""
         return f"""
         User Query: {context['user_query']}
         File Path: {context['file_path']}
@@ -133,32 +132,31 @@ def document_pipeline():
 
     @task
     def format_final_output(result: Dict[str, Any], context: Dict[str, Any]) -> str:
-        """Generate final formatted output with all metrics"""
+        """Generate final output with timezone-aware timestamps"""
         metrics = result.get('metrics', {})
-        content = result.get('content', '')
-        
         output = f"""
-## Document Processing Report
+## Transcript Processing Report
 
 ### File Metadata
 - Type: {metrics.get('file_type', 'N/A')}
 - Size: {metrics.get('file_size', 0)/1024:.2f} KB
-- Source: {os.path.basename(context['file_path'])}
+- Process Started: {context['process_start']}
 
 ### Processing Metrics
-- Total Time: {metrics.get('total_time', 0):.2f}s
-  - Parsing: {metrics.get('parse_time', 0):.2f}s 
-  - Cleaning: {metrics.get('clean_time', 0):.2f}s
-- Content Length:
-  - Original: {metrics.get('original_length', 0)} chars
-  - Cleaned: {metrics.get('cleaned_length', 0)} chars
+1. Parsing Stage:
+   - Duration: {metrics.get('parse_time', 0):.2f}s
+   - Started: {metrics.get('parse_start', 'N/A')}
 
-### Query Results
-{content}
+2. Cleaning Stage:
+   - Duration: {metrics.get('clean_time', 0):.2f}s
+   - Started: {metrics.get('clean_start', 'N/A')}
+   - Content Reduction: {metrics.get('original_length', 0) - metrics.get('cleaned_length', 0)} characters
 
-### Timeline
-- Started: {context['process_start']}
-- Completed: {datetime.utcnow().isoformat()}
+### Analysis Results
+{result.get('content', 'No relevant information found')}
+
+### Final Output
+Generated at: {datetime.now(timezone.utc).isoformat()}
         """
         print(output)
         return output
@@ -169,4 +167,4 @@ def document_pipeline():
     final_output = format_final_output(agent_result, context)
 
 # Instantiate DAG
-document_pipeline_dag = document_pipeline()
+transcript_processor = transcript_pipeline()
