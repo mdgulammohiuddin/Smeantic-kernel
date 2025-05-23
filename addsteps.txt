@@ -2,3 +2,5 @@ Remove Timestamps: Use regular expressions to identify and remove timestamps.
 Remove Special Characters: Strip out punctuation or symbols that aren't part of the text.
 Remove Filler Words: Filter out common filler words to improve readability.
 Normalize Whitespace: Replace multiple spaces with a single space and trim leading/trailing spaces.
+
+https://github.com/pravinshinde160398/meeting-minutes-summarizer
