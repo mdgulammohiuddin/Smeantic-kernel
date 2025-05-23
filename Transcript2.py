@@ -1,20 +1,13 @@
 import os
 import time
 from datetime import datetime, timedelta, timezone
+import json # Import the json library
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
-from pydantic_ai import Agent as PydanticAIAgent # Ensure this is the correct import
-# If pydantic-ai is a different package, adjust the import.
-# Assuming it's from `instructor` or a similar library that uses Pydantic with LLMs,
-# the agent setup might be slightly different, but the core idea of using an output model remains.
-# For this example, I'll assume PydanticAIAgent is correctly named and used.
-
+from pydantic_ai import Agent as PydanticAIAgent # Using the user's specified import
 import logging
 from typing import Dict, Any, Tuple, Optional
-
-# Import Pydantic BaseModel and Field
-from pydantic import BaseModel, Field
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -29,66 +22,11 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 
-# --------- Tool 1: Document Parser ---------
-def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
-    """Parse document and return content with metadata"""
-    try:
-        start_time = time.time()
-        
-        if not os.path.exists(file_path):
-            # Return error information in a structured way if possible, or raise an exception
-            # For simplicity, tools here return error strings, but agent needs to handle them.
-            return f"Error: File not found at {file_path}", {
-                "error": f"File not found at {file_path}",
-                "parse_time": time.time() - start_time,
-                "parse_start": datetime.now(timezone.utc).isoformat()
-            }
-        
-        elements = partition(filename=file_path)
-        content = "\n\n".join([str(e) for e in elements])
-        
-        return content, {
-            "parse_time": time.time() - start_time,
-            "file_size": os.path.getsize(file_path),
-            "file_type": os.path.splitext(file_path)[1][1:].upper(),
-            "parse_start": datetime.now(timezone.utc).isoformat()
-        }
-    except Exception as e:
-        return f"Parsing error: {str(e)}", {
-            "error": f"Parsing error: {str(e)}",
-            "parse_time": time.time() - start_time if 'start_time' in locals() else 0,
-            "parse_start": datetime.now(timezone.utc).isoformat()
-        }
+# --------- Pydantic Models (for defining JSON structure) ---------
+# These are not passed to the agent directly but used to define the JSON structure in the prompt.
+from pydantic import BaseModel, Field # Keep these for schema reference if needed, or just describe in prompt
 
-# --------- Tool 2: Content Cleaner ---------
-def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
-    """Clean parsed content and return with metrics"""
-    try:
-        start_time = time.time()
-        clean_start_time = datetime.now(timezone.utc).isoformat()
-        
-        # Advanced cleaning operations
-        cleaned = "\n".join([
-            line.strip() 
-            for line in raw_content.split("\n") 
-            if line.strip() and not line.startswith(("Â", "�"))  # Remove special chars
-        ])
-        
-        return cleaned, {
-            "clean_time": time.time() - start_time,
-            "original_length": len(raw_content),
-            "cleaned_length": len(cleaned),
-            "clean_start": clean_start_time
-        }
-    except Exception as e:
-        return f"Cleaning error: {str(e)}", {
-             "error": f"Cleaning error: {str(e)}",
-             "clean_time": time.time() - start_time if 'start_time' in locals() else 0,
-             "clean_start": datetime.now(timezone.utc).isoformat()
-        }
-
-# --------- Pydantic Models for Agent Output ---------
-class AgentOutputMetrics(BaseModel):
+class AgentOutputMetricsStructure: # Using a plain class/dict for prompt description
     file_type: Optional[str] = None
     file_size: Optional[int] = None
     parse_time: Optional[float] = None
@@ -97,53 +35,112 @@ class AgentOutputMetrics(BaseModel):
     clean_start: Optional[str] = None
     original_length: Optional[int] = None
     cleaned_length: Optional[int] = None
-    error_message: Optional[str] = None # To capture any errors from tools
+    error_message: Optional[str] = None
 
-class AgentOutput(BaseModel):
-    content: str = Field(description="Query-relevant information in bullet points (Markdown formatted). If an error occurred, summarize the error here.")
-    metrics: AgentOutputMetrics
+class AgentOutputStructure:
+    content: str
+    metrics: AgentOutputMetricsStructure
+
+# --------- Tool 1: Document Parser ---------
+def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
+    """Parse document and return content with metadata"""
+    start_time_func = time.time()
+    current_utc_time = datetime.now(timezone.utc).isoformat()
+    try:
+        if not os.path.exists(file_path):
+            return f"Error: File not found at {file_path}", {
+                "error": f"File not found at {file_path}",
+                "parse_time": time.time() - start_time_func,
+                "parse_start": current_utc_time
+            }
+        elements = partition(filename=file_path)
+        content = "\n\n".join([str(e) for e in elements])
+        return content, {
+            "parse_time": time.time() - start_time_func,
+            "file_size": os.path.getsize(file_path),
+            "file_type": os.path.splitext(file_path)[1][1:].upper(),
+            "parse_start": current_utc_time
+        }
+    except Exception as e:
+        logger.error(f"Parsing error for {file_path}: {e}", exc_info=True)
+        return f"Parsing error: {str(e)}", {
+            "error": f"Parsing error: {str(e)}",
+            "parse_time": time.time() - start_time_func,
+            "parse_start": current_utc_time
+        }
+
+# --------- Tool 2: Content Cleaner ---------
+def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
+    """Clean parsed content and return with metrics"""
+    start_time_func = time.time()
+    current_utc_time = datetime.now(timezone.utc).isoformat()
+    try:
+        cleaned = "\n".join([
+            line.strip()
+            for line in raw_content.split("\n")
+            if line.strip() and not line.startswith(("Â", "�"))
+        ])
+        return cleaned, {
+            "clean_time": time.time() - start_time_func,
+            "original_length": len(raw_content),
+            "cleaned_length": len(cleaned),
+            "clean_start": current_utc_time
+        }
+    except Exception as e:
+        logger.error(f"Cleaning error: {e}", exc_info=True)
+        return f"Cleaning error: {str(e)}", {
+            "error": f"Cleaning error: {str(e)}",
+            "clean_time": time.time() - start_time_func,
+            "clean_start": current_utc_time
+        }
 
 # --------- Agent Configuration ---------
-document_agent = PydanticAIAgent(
+document_agent = PydanticAIAgent( # No output_model argument here
     model="gpt-4o",
     tools=[parse_document, clean_content],
-    output_model=AgentOutput, # Specify the output model
     system_prompt="""
 You are a transcript processing system. Your goal is to process a document, clean its content,
-and then analyze it based on a user query. You must populate the 'AgentOutput' model.
+and then analyze it based on a user query.
+You MUST return your entire response as a single, valid JSON object (string).
+Do NOT use Markdown formatting for the overall JSON structure.
+The JSON object should have two top-level keys: "content" and "metrics".
+
+The "content" key should contain a string with query-relevant information in bullet points (this string can contain Markdown).
+If an error occurs, "content" should summarize the error.
+
+The "metrics" key should contain an object with the following fields:
+  "file_type": (string, from parse_document metadata, or null if error)
+  "file_size": (integer, from parse_document metadata, or null if error)
+  "parse_time": (float, duration from parse_document metadata, or null if error)
+  "parse_start": (string, ISO datetime from parse_document metadata, or null if error)
+  "clean_time": (float, duration from clean_content metadata, or null if error before cleaning)
+  "clean_start": (string, ISO datetime from clean_content metadata, or null if error before cleaning)
+  "original_length": (integer, from clean_content metadata, or null if error before cleaning)
+  "cleaned_length": (integer, from clean_content metadata, or null if error before cleaning)
+  "error_message": (string, describe any error that occurred during parsing or cleaning, or null if no errors)
 
 Follow these steps strictly:
+1.  Use `parse_document` with the file path. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 2 if parsing fails critically.
+2.  If parsing is successful, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for other clean-related metric fields.
+3.  If cleaning is successful, analyze cleaned content against the user query for "content".
+4.  Construct the final JSON object string as described above.
 
-1.  Use the `parse_document` tool with the provided file path. This tool returns the raw content
-    and a dictionary of metadata (parse_time, file_size, file_type, parse_start).
-    If `parse_document` returns an error in its content or metadata (e.g., file not found),
-    capture this error in the `AgentOutput.metrics.error_message` field and summarize in `AgentOutput.content`.
-    Do not proceed to step 2 if parsing fails critically.
-
-2.  If parsing is successful, use the `clean_content` tool on the raw content from step 1.
-    This tool returns the cleaned content and a dictionary of metadata (clean_time, original_length, cleaned_length, clean_start).
-    If `clean_content` returns an error, capture this in `AgentOutput.metrics.error_message` and summarize in `AgentOutput.content`.
-
-3.  If cleaning is successful, analyze the cleaned content against the user query to produce query-relevant information.
-    This information should be formatted as Markdown bullet points.
-
-4.  Populate all fields of the 'AgentOutput' Pydantic model:
-    -   `AgentOutput.content`: Store the Markdown bullet points of query-relevant information. If an error occurred in prior steps, provide a summary of the error.
-    -   `AgentOutput.metrics.file_type`: From `parse_document` metadata.
-    -   `AgentOutput.metrics.file_size`: From `parse_document` metadata.
-    -   `AgentOutput.metrics.parse_time`: From `parse_document` metadata.
-    -   `AgentOutput.metrics.parse_start`: From `parse_document` metadata.
-    -   `AgentOutput.metrics.clean_time`: From `clean_content` metadata.
-    -   `AgentOutput.metrics.clean_start`: From `clean_content` metadata.
-    -   `AgentOutput.metrics.original_length`: From `clean_content` metadata.
-    -   `AgentOutput.metrics.cleaned_length`: From `clean_content` metadata.
-    -   `AgentOutput.metrics.error_message`: Populate if any tool reported an error or if a step could not be completed.
-
-Tool usage sequence is MANDATORY if preceding steps are successful:
-`parse_document` -> `clean_content` -> analysis.
-
-NEVER repeat tools. Ensure your final output is a valid instance of the 'AgentOutput' model.
-If `parse_document` fails, try to populate `parse_time`, `parse_start` and the error in metrics, and a relevant message in content.
+Tool usage sequence (if successful): parse_document -> clean_content -> analysis.
+Ensure your output is ONLY the JSON string. Example of output format:
+{
+  "content": "- Action item 1\\n- Action item 2",
+  "metrics": {
+    "file_type": "DOCX",
+    "file_size": 12345,
+    "parse_time": 1.23,
+    "parse_start": "2025-01-01T12:00:00Z",
+    "clean_time": 0.45,
+    "clean_start": "2025-01-01T12:00:02Z",
+    "original_length": 1000,
+    "cleaned_length": 800,
+    "error_message": null
+  }
+}
 """
 )
 
@@ -158,47 +155,33 @@ default_args = {
 }
 
 @dag(
-    dag_id="transcript_processor",
+    dag_id="transcript_processor_v2", # New DAG ID to avoid conflicts
     default_args=default_args,
     schedule=None,
-    start_date=datetime(2025, 1, 1, tzinfo=timezone.utc), # Ensure start_date is in the past for immediate runs if schedule is None, or a future date for scheduled runs.
+    start_date=datetime(2023, 1, 1, tzinfo=timezone.utc), # Adjusted for testing
     catchup=False,
-    tags=["transcript", "ai-agent", "metrics"],
+    tags=["transcript", "ai-agent", "json-output"],
     params={
-        "file_name": "meeting_transcript.docx", # Ensure this file exists in ASSETS_DIR for testing
+        "file_name": "meeting_transcript.docx",
         "user_query": "List all action items from the document"
     }
 )
-def transcript_pipeline():
+def transcript_pipeline_v2():
 
     @task
     def prepare_context(**kwargs) -> Dict[str, Any]:
-        """Collect initial context with proper timezone"""
         params = kwargs.get('params', {})
-        file_name = params.get('file_name', "meeting_transcript.docx") # Default for safety
-        user_query = params.get('user_query', "List all action items.") # Default for safety
-        
-        # Ensure ASSETS_DIR is correctly resolved if DAG is in a subfolder
-        # This __file__ might point to the DAG file's location.
-        # If ASSETS_DIR is relative to the project root, you might need a more robust path construction.
-        # For example, using `os.path.dirname(os.path.dirname(__file__))` if DAGs are in a 'dags' subdir.
-        # The provided ASSETS_DIR calculation seems okay if this file is in a 'dags' folder and 'assets' is a sibling.
-        
+        file_name = params.get('file_name', "meeting_transcript.docx")
+        user_query = params.get('user_query', "List all action items.")
         return {
             "file_path": os.path.join(ASSETS_DIR, file_name),
             "user_query": user_query,
             "process_start": datetime.now(timezone.utc).isoformat()
         }
 
-    @task.agent(agent=document_agent) # Type hint implicitly handled by Pydantic model if agent returns it
-    def process_document(context: Dict[str, Any]) -> Dict[str, Any]: # Output should be Dict from Pydantic model dump
-        """Agent task with enforced tool sequence.
-        The input to the agent is constructed here.
-        The PydanticAIAgent (with output_model) should return a Pydantic model instance.
-        Airflow's @task.agent decorator or XCom serialization should handle converting this
-        Pydantic model instance into a dictionary.
-        """
-        # The string returned here is the initial prompt/query for the agent's run method.
+    @task.agent(agent=document_agent)
+    def process_document_get_json(context: Dict[str, Any]) -> str: # Task now returns a string (JSON string)
+        """Agent task that returns a JSON string."""
         return f"""
         User Query: {context['user_query']}
         File Path: {context['file_path']}
@@ -206,20 +189,44 @@ def transcript_pipeline():
         """
 
     @task
-    def format_final_output(result: Dict[str, Any], context: Dict[str, Any]) -> str:
-        """Generate final output with timezone-aware timestamps"""
-        # 'result' is now expected to be a dictionary derived from the AgentOutput Pydantic model
-        agent_content = result.get('content', 'No relevant information found or error in processing.')
-        metrics_data = result.get('metrics', {})
-        
-        # Handle potential division by zero if file_size is None or 0
-        file_size_kb = "N/A"
-        if metrics_data.get('file_size') is not None:
-            try:
-                file_size_kb_val = float(metrics_data['file_size']) / 1024
-                file_size_kb = f"{file_size_kb_val:.2f} KB"
-            except TypeError: # Handles if file_size is not a number
-                 file_size_kb = "Invalid Size"
+    def parse_agent_json_output(json_string: str) -> Dict[str, Any]:
+        """Parses the JSON string output from the agent into a dictionary."""
+        try:
+            return json.loads(json_string)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from agent: {e}")
+            logger.error(f"Received string: {json_string}")
+            # Return a default error structure if parsing fails
+            return {
+                "content": "Error: Agent returned malformed JSON.",
+                "metrics": {
+                    "error_message": f"JSONDecodeError: {e}. Received: {json_string[:200]}..." # Truncate long strings
+                }
+            }
+
+    @task
+    def format_final_output(result_dict: Dict[str, Any], context: Dict[str, Any]) -> str:
+        """Generate final output from the parsed dictionary."""
+        agent_content = result_dict.get('content', 'No relevant information found or error in processing.')
+        metrics_data = result_dict.get('metrics', {})
+
+        file_size_kb_str = "N/A"
+        file_size_bytes = metrics_data.get('file_size')
+        if isinstance(file_size_bytes, (int, float)):
+            file_size_kb_str = f"{file_size_bytes / 1024:.2f} KB"
+        elif file_size_bytes is not None: # If it's some other non-numeric type
+            file_size_kb_str = "Invalid Size Data"
+            
+        # Ensure float formatting for times, handle None gracefully
+        parse_time_str = f"{metrics_data.get('parse_time'):.2f}s" if metrics_data.get('parse_time') is not None else "N/A"
+        clean_time_str = f"{metrics_data.get('clean_time'):.2f}s" if metrics_data.get('clean_time') is not None else "N/A"
+
+
+        reduction_str = "N/A"
+        original_len = metrics_data.get('original_length')
+        cleaned_len = metrics_data.get('cleaned_length')
+        if isinstance(original_len, int) and isinstance(cleaned_len, int):
+            reduction_str = f"{original_len - cleaned_len} characters"
 
 
         output = f"""
@@ -227,23 +234,23 @@ def transcript_pipeline():
 
 ### File Metadata
 - Type: {metrics_data.get('file_type', 'N/A')}
-- Size: {file_size_kb}
+- Size: {file_size_kb_str}
 - Process Started (Overall): {context['process_start']}
 
 ### Processing Metrics
 1. Parsing Stage:
-   - Duration: {metrics_data.get('parse_time', 'N/A'):.2f}s
+   - Duration: {parse_time_str}
    - Started: {metrics_data.get('parse_start', 'N/A')}
 
 2. Cleaning Stage:
-   - Duration: {metrics_data.get('clean_time', 'N/A'):.2f}s
+   - Duration: {clean_time_str}
    - Started: {metrics_data.get('clean_start', 'N/A')}
    - Original Length: {metrics_data.get('original_length', 'N/A')} characters
    - Cleaned Length: {metrics_data.get('cleaned_length', 'N/A')} characters
-   - Content Reduction: {(metrics_data.get('original_length', 0) or 0) - (metrics_data.get('cleaned_length', 0) or 0)} characters
+   - Content Reduction: {reduction_str}
 
 {f"### Errors during Processing
-- {metrics_data.get('error_message')}" if metrics_data.get('error_message') else ""}
+- {metrics_data.get('error_message')}" if metrics_data.get('error_message') else "No errors reported by agent."}
 
 ### Analysis Results
 {agent_content}
@@ -256,8 +263,9 @@ Generated at: {datetime.now(timezone.utc).isoformat()}
 
     # DAG execution flow
     context_data = prepare_context()
-    agent_result_data = process_document(context_data)
-    final_report = format_final_output(agent_result_data, context_data)
+    agent_json_result = process_document_get_json(context_data)
+    parsed_agent_result = parse_agent_json_output(agent_json_result)
+    final_report = format_final_output(parsed_agent_result, context_data)
 
 # Instantiate DAG
-transcript_processor_dag = transcript_pipeline()
+transcript_processor_dag_v2 = transcript_pipeline_v2()
