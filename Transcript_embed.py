@@ -187,7 +187,7 @@ default_args = {
     catchup=False,
     tags=["transcript", "ai-agent", "json-output"],
     params={
-        "file_name": "meeting_transcript.txt",
+        "file_name": "meeting_transcript.docx",
         "user_query": "List all action items"
     }
 )
@@ -195,7 +195,7 @@ def transcript_pipeline():
     @task
     def prepare_context(**kwargs: Dict[str, Any]) -> Dict[str, Any]:
         params = kwargs.get('params', {})
-        file_name = params.get('file_name', "meeting_transcript.txt")
+        file_name = params.get('file_name', "meeting_transcript.docx")
         user_query = params.get('user_query', "List all action items")
         return {
             "file_path": os.path.join(ASSETS_DIR, file_name),
