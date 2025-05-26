@@ -180,7 +180,7 @@ default_args = {
 }
 
 @dag(
-    dag_id="transcript_processor",
+    dag_id="transcript_processor_embed",
     default_args=default_args,
     schedule=None,
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
@@ -239,7 +239,7 @@ def transcript_pipeline():
                 }
             }
 
-    @task.embed(model="text-embedding-ada-002")
+    @task.embed(model_name="text-embedding-ada-002",encode_kwargs={"normalize_embeddings": True})
     def embed_output(parsed_result: Dict[str, Any]) -> list:
         """Generate embeddings for the content field using OpenAI's text-embedding-ada-002."""
         content = parsed_result.get('content', '')
