@@ -159,13 +159,13 @@ def image_processing_pipeline():
     def process_image_get_json(context: Dict[str, Any]) -> str:
         """Agent task that processes the image and returns a JSON string."""
         try:
-            # Pass context as a prompt string, similar to transcript processor
+            # Pass context as a prompt string
             prompt = f"""
             User Query: {context['user_query']}
             Image Path: {context['image_path']}
             Process Start Time (UTC): {context['process_start']}
             """
-            result = image_agent.run(prompt)
+            result = image_agent.run_sync(prompt)  # Use run_sync for synchronous execution
             return result
         except Exception as e:
             logger.error(f"Agent processing error: {e}", exc_info=True)
