@@ -1,7 +1,7 @@
 import os
 import time
 import json
-from datetime rite import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
