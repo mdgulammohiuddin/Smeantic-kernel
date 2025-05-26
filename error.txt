@@ -1,15 +1,25 @@
-Traceback (most recent call last):
-  File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 40, in __init__
-    import sentence_transformers  # noqa: F401
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-ModuleNotFoundError: No module named 'sentence_transformers'
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=transcript_processor_embed/run_id=manual__2025-05-26T08:48:51.084469+00:00/task_id=embed_output/attempt=1.log"]
+[2025-05-26, 14:19:43] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-26, 14:19:43] INFO - Filling up the DagBag from /app/fdi/dags/transcript_embed.py: source="airflow.models.dagbag.DagBag"
+[2025-05-26, 14:19:53] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='transcript_processor_embed', key='return_value') }}: chan="stdout": source="task"
+[2025-05-26, 14:19:53] WARNING - No valid content to embed: source="unusual_prefix_069cf4cae5392d299b2db8c38c8b46002bf7dc2c_transcript_embed"
+[2025-05-26, 14:19:53] INFO - Done. Returned value was: []: source="airflow.task.operators.airflow_ai_sdk.operators.embed.EmbedDecoratedOperator"
+[2025-05-26, 14:19:53] ERROR - Task failed with exception: source="task"
+TypeError: Attribute `text` must be of type `str`
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
 
-The above exception was the direct cause of the following exception:
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
 
-Traceback (most recent call last):
-  File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 513, in apply_defaults
-    result = func(self, **kwargs, default_args=default_args)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 42, in __init__
-    raise ImportError(
-ImportError: sentence-transformers is not installed but is required for the embedding operator. Please install it before using the embedding operator.
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 50 in execute
+
+[2025-05-26, 14:19:53] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO - Current task name:embed_output: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO - Dag name:transcript_processor_embed: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO - Executing embedding: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO - Task instance in failure state: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO - Task start: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO - Task:<Task(EmbedDecoratedOperator): embed_output>: chan="stdout": source="task"
+[2025-05-26, 14:19:53] INFO - Failure caused by Attribute `text` must be of type `str`: chan="stdout": source="task"
