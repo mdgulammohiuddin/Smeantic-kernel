@@ -74,7 +74,7 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Parsing error for {file_path}: {e}", exc_info=True)
         return f"Parsing error: {str(e)}", {
-            "error_message": f"Parsing error: {str(e)}",
+            "error": f"Parsing error: {str(e)}",
             "parse_time": time.time() - start_time_func,
             "parse_start": current_utc_time
         }
@@ -200,11 +200,23 @@ def transcript_pipeline():
     def prepare_context(**kwargs: Dict[str, Any]) -> Dict[str, Any]:
         params = kwargs.get('params', {})
         file_name = params.get('file_name', "meeting_transcript.docx")
-        file_path = os.path.join(ASSETS_DIR, file_name)
+        logger.info(f"Received params: {params}, file_name: {file_name}")
+        # Normalize file path
+        if os.path.isabs(file_name):
+            file_path = file_name
+        else:
+            file_path = os.path.join(ASSETS_DIR, file_name)
         user_query = params.get('user_query', "List all action items")
         if not os.path.exists(file_path):
-            logger.warning(f"File not found, using empty content: {file_path}")
-            file_path = None  # Indicate no file
+            logger.warning(f"File not found: {file_path}, falling back to default")
+            # Fallback to default file
+            default_file = os.path.join(ASSETS_DIR, "meeting_transcript.docx")
+            if os.path.exists(default_file):
+                file_path = default_file
+                logger.info(f"Using default file: {file_path}")
+            else:
+                file_path = None
+                logger.error(f"Default file not found: {default_file}")
         logger.info(f"Prepared context: file_path={file_path}, user_query={user_query}")
         return {
             "file_path": file_path,
@@ -217,6 +229,7 @@ def transcript_pipeline():
         """Agent task that processes the document and returns a JSON string."""
         try:
             file_path = context['file_path']
+            logger.info(f"Processing file: {file_path}")
             if not file_path:
                 logger.error("No valid file path provided")
                 return json.dumps({
