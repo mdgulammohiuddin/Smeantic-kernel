@@ -7,11 +7,12 @@ from dotenv import load_dotenv
 from unstructured.partition.auto import partition
 from pydantic_ai import Agent as PydanticAIAgent
 import logging
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 import re
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+import openai
 
 # Download required NLTK data (only runs if not already downloaded)
 try:
@@ -30,6 +31,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set")
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
+# Initialize OpenAI client
+openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 
@@ -70,7 +74,7 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Parsing error for {file_path}: {e}", exc_info=True)
         return f"Parsing error: {str(e)}", {
-            "error": f"Parsing error: {str(e)}",
+            "error_message": f"Parsing error: {str(e)}",
             "parse_time": time.time() - start_time_func,
             "parse_start": current_utc_time
         }
@@ -81,7 +85,7 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
     current_utc_time = datetime.now(timezone.utc).isoformat()
     try:
         # Step 1: Remove timestamps (e.g., 12:34:56, 12:34, or HH:MM:SS.mmm formats)
-        timestamp_pattern = r'\b\d{1,2}:\d{2}\b{d:2}\s?(\.\d{1,3})?\b'
+        timestamp_pattern = r'\b\d{1,2}:\d{2}(:\d{2})?(\.\d{1,3})?\b'
         content = re.sub(timestamp_pattern, '', raw_content)
 
         # Step 2: Remove special characters and punctuation, keep alphanumeric and spaces
@@ -196,9 +200,14 @@ def transcript_pipeline():
     def prepare_context(**kwargs: Dict[str, Any]) -> Dict[str, Any]:
         params = kwargs.get('params', {})
         file_name = params.get('file_name', "meeting_transcript.docx")
+        file_path = os.path.join(ASSETS_DIR, file_name)
         user_query = params.get('user_query', "List all action items")
+        if not os.path.exists(file_path):
+            logger.warning(f"File not found, using empty content: {file_path}")
+            file_path = None  # Indicate no file
+        logger.info(f"Prepared context: file_path={file_path}, user_query={user_query}")
         return {
-            "file_path": os.path.join(ASSETS_DIR, file_name),
+            "file_path": file_path,
             "user_query": user_query,
             "process_start_time": datetime.now(timezone.utc).isoformat()
         }
@@ -208,6 +217,14 @@ def transcript_pipeline():
         """Agent task that processes the document and returns a JSON string."""
         try:
             file_path = context['file_path']
+            if not file_path:
+                logger.error("No valid file path provided")
+                return json.dumps({
+                    "content": "Error: No valid file path provided",
+                    "metrics": {
+                        "error_message": "No valid file path provided"
+                    }
+                })
             if not os.path.exists(file_path):
                 logger.error(f"File not found: {file_path}")
                 return json.dumps({
@@ -251,15 +268,25 @@ def transcript_pipeline():
                 }
             }
 
-    @task.embed(model_name="text-embedding-ada-002", encode_kwargs={"normalize_embeddings": True})
-    def embed_output(parsed_result: Dict[str, Any]) -> str:
+    @task
+    def embed_output(parsed_result: Dict[str, Any]) -> list:
         """Generate embeddings for the content field using OpenAI's text-embedding-ada-002."""
         logger.info(f"Embedding input: {parsed_result}")
         content = parsed_result.get('content', '')
         if not content or "error" in content.lower():
             logger.warning(f"No valid content to embed: {content}")
-            return ""  # Return empty string to satisfy @task.embed
-        return content  # @task.embed will handle embedding the string
+            return []
+        try:
+            response = openai_client.embeddings.create(
+                input=content,
+                model="text-embedding-ada-002"
+            )
+            embedding = response.data[0].embedding
+            logger.info(f"Generated embedding: length={len(embedding)}")
+            return embedding
+        except Exception as e:
+            logger.error(f"Embedding error: {e}", exc_info=True)
+            return []
 
     @task
     def format_final_output(result_dict: Dict[str, Any], embedding: list, context: Dict[str, Any]) -> str:
