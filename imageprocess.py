@@ -166,7 +166,7 @@ def image_processing_pipeline():
             Process Start Time (UTC): {context['process_start']}
             """
             result = image_agent.run_sync(prompt)  # Use run_sync for synchronous execution
-            return result
+            return result.data  # Extract the JSON string from the AgentRunResult object
         except Exception as e:
             logger.error(f"Agent processing error: {e}", exc_info=True)
             return json.dumps({
