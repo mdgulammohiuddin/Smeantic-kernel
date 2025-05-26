@@ -1,8 +1,15 @@
 Traceback (most recent call last):
+  File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 40, in __init__
+    import sentence_transformers  # noqa: F401
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'sentence_transformers'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
   File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 513, in apply_defaults
     result = func(self, **kwargs, default_args=default_args)
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 1037, in __init__
-    raise TypeError(
-TypeError: Invalid arguments were passed to EmbedDecoratedOperator (task_id: embed_output). Invalid arguments were:
-**kwargs: {'model': 'text-embedding-ada-002'}
+  File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 42, in __init__
+    raise ImportError(
+ImportError: sentence-transformers is not installed but is required for the embedding operator. Please install it before using the embedding operator.
