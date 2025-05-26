@@ -1,13 +1,13 @@
 import os
 import time
-from datetime import datetime, timedelta, timezone
 import json
+from datetime rite import datetime, timedelta, timezone
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
 from pydantic_ai import Agent as PydanticAIAgent
 import logging
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple
 import re
 import nltk
 from nltk.corpus import stopwords
@@ -81,7 +81,7 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
     current_utc_time = datetime.now(timezone.utc).isoformat()
     try:
         # Step 1: Remove timestamps (e.g., 12:34:56, 12:34, or HH:MM:SS.mmm formats)
-        timestamp_pattern = r'\b\d{1,2}:\d{2}(:\d{2})?(\.\d{1,3})?\b'
+        timestamp_pattern = r'\b\d{1,2}:\d{2}\b{d:2}\s?(\.\d{1,3})?\b'
         content = re.sub(timestamp_pattern, '', raw_content)
 
         # Step 2: Remove special characters and punctuation, keep alphanumeric and spaces
@@ -207,13 +207,23 @@ def transcript_pipeline():
     def process_document_get_json(context: Dict[str, Any]) -> str:
         """Agent task that processes the document and returns a JSON string."""
         try:
+            file_path = context['file_path']
+            if not os.path.exists(file_path):
+                logger.error(f"File not found: {file_path}")
+                return json.dumps({
+                    "content": f"Error: File not found at {file_path}",
+                    "metrics": {
+                        "error_message": f"File not found at {file_path}"
+                    }
+                })
             # Pass context as a prompt string
             prompt = f"""
             User Query: {context['user_query']}
-            File Path: {context['file_path']}
+            File Path: {file_path}
             Process Start Time (UTC): {context['process_start_time']}
             """
             result = document_agent.run_sync(prompt)
+            logger.info(f"Agent output: {result.data}")
             return result.data  # Extract the JSON string from the AgentRunResult object
         except Exception as e:
             logger.error(f"Agent processing error: {e}", exc_info=True)
@@ -228,7 +238,9 @@ def transcript_pipeline():
     def parse_agent_json_output(json_string: str) -> Dict[str, Any]:
         """Parses the JSON string output from the agent into a dictionary."""
         try:
-            return json.loads(json_string)
+            result = json.loads(json_string)
+            logger.info(f"Parsed agent output: {result}")
+            return result
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON from agent: {e}")
             logger.error(f"Received string: {json_string}")
@@ -239,13 +251,14 @@ def transcript_pipeline():
                 }
             }
 
-    @task.embed(model_name="text-embedding-ada-002",encode_kwargs={"normalize_embeddings": True})
-    def embed_output(parsed_result: Dict[str, Any]) -> list:
+    @task.embed(model_name="text-embedding-ada-002", encode_kwargs={"normalize_embeddings": True})
+    def embed_output(parsed_result: Dict[str, Any]) -> str:
         """Generate embeddings for the content field using OpenAI's text-embedding-ada-002."""
+        logger.info(f"Embedding input: {parsed_result}")
         content = parsed_result.get('content', '')
         if not content or "error" in content.lower():
-            logger.warning("No valid content to embed")
-            return []
+            logger.warning(f"No valid content to embed: {content}")
+            return ""  # Return empty string to satisfy @task.embed
         return content  # @task.embed will handle embedding the string
 
     @task
