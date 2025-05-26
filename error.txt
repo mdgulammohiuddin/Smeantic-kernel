@@ -1,11 +1,18 @@
-Log message source details: sources=["/app/fdi/airflow/logs/dag_id=image_processor/run_id=manual__2025-05-26T05:33:30.026002+00:00/task_id=process_image_get_json/attempt=1.log"]
-[2025-05-26, 11:03:39] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
-[2025-05-26, 11:03:39] INFO - Filling up the DagBag from /app/fdi/dags/image_processing_agent.py: source="airflow.models.dagbag.DagBag"
-[2025-05-26, 11:03:44] WARNING - Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.: source="easyocr.easyocr"
-[2025-05-26, 11:03:47] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='image_processor', key='return_value') }}: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Done. Returned value was: <coroutine object Agent.run at 0x75cb1742fdf0>: source="airflow.task.operators.airflow_ai_sdk.operators.agent.AgentDecoratedOperator"
-[2025-05-26, 11:03:47] ERROR - Task failed with exception: source="task"
-TypeError: 'coroutine' object is not iterable
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=image_processor/run_id=manual__2025-05-26T06:03:06.649988+00:00/task_id=process_image_get_json/attempt=1.log"]
+[2025-05-26, 11:33:16] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-26, 11:33:16] INFO - Filling up the DagBag from /app/fdi/dags/image_processing_agent.py: source="airflow.models.dagbag.DagBag"
+[2025-05-26, 11:33:20] WARNING - Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.: source="easyocr.easyocr"
+[2025-05-26, 11:33:23] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='image_processor', key='return_value') }}: chan="stdout": source="task"
+[2025-05-26, 11:33:23] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-26, 11:33:23] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-26, 11:33:23] INFO - Current task name:process_image_get_json: chan="stdout": source="task"
+[2025-05-26, 11:33:23] INFO - Dag name:image_processor: chan="stdout": source="task"
+[2025-05-26, 11:33:23] INFO - Executing LLM call: chan="stdout": source="task"
+Calling tool extract_text_from_image with args {"image_source":"/app/fdi/assets/image.png"}: chan="stdout": source="task"
+[2025-05-26, 11:33:33] INFO - Done. Returned value was: AgentRunResult(data='{\n  "content": "- **Problem Statement:** The process involves both static and dynamic inputs.\\n- **Static Inputs:**\\n  - Rules file (Excel sheet with predefined rules)\\n  - FRD Template with 26 sections and headings\\n  - Human reviews and edits termed as \\"Version 1\\"\\n  - Allow storing of version history\\n- **Dynamic Inputs:**\\n  - Meeting transcripts (from Teams calls)\\n  - Emails and files from emails (Word, PDF, Excel, PPT, Images)\\n  - Versions like \\"Version 2\\", \\"Version 3\\", etc can be created\\n- **Architecture:** Multi-agent system where each agent handles different files/tasks\\n- **Roles in System:**\\n  - Admin: Full control including creating projects, uploads, reviewing, and editing\\n  - User: Limited control mostly for uploads, optional review and edit\\n- **Versioning System:** Allows creating multiple versions\\n",\n  "metrics": {\n    "file_type": "PNG",\n    "file_size": 136509,\n    "parse_time": 4.132328033447266,\n    "parse_start": "2025-05-26T06:03:25.004479+00:00",\n    "error_message": null\n  }\n}'): source="airflow.task.operators.airflow_ai_sdk.operators.agent.AgentDecoratedOperator"
+[2025-05-26, 11:33:33] INFO - Prompt: AgentRunResult(data='{\n  "content": "- **Problem Statement:** The process involves both static and dynamic inputs.\\n- **Static Inputs:**\\n  - Rules file (Excel sheet with predefined rules)\\n  - FRD Template with 26 sections and headings\\n  - Human reviews and edits termed as \\"Version 1\\"\\n  - Allow storing of version history\\n- **Dynamic Inputs:**\\n  - Meeting transcripts (from Teams calls)\\n  - Emails and files from emails (Word, PDF, Excel, PPT, Images)\\n  - Versions like \\"Version 2\\", \\"Version 3\\", etc can be created\\n- **Architecture:** Multi-agent system where each agent handles different files/tasks\\n- **Roles in System:**\\n  - Admin: Full control including creating projects, uploads, reviewing, and editing\\n  - User: Limited control mostly for uploads, optional review and edit\\n- **Versioning System:** Allows creating multiple versions\\n",\n  "metrics": {\n    "file_type": "PNG",\n    "file_size": 136509,\n    "parse_time": 4.132328033447266,\n    "parse_start": "2025-05-26T06:03:25.004479+00:00",\n    "error_message": null\n  }\n}'): chan="stdout": source="task"
+[2025-05-26, 11:33:33] ERROR - Task failed with exception: source="task"
+TypeError: 'AgentRunResult' object is not iterable
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
@@ -42,14 +49,8 @@ File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.p
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/pydantic_ai/models/openai.py", line 408 in _map_user_prompt
 
-[2025-05-26, 11:03:47] INFO - Task instance is in running state: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Current task name:process_image_get_json: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Dag name:image_processor: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Executing LLM call: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Prompt: <coroutine object Agent.run at 0x75cb1742fdf0>: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Error: 'coroutine' object is not iterable: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Task instance in failure state: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Task start: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Task:<Task(AgentDecoratedOperator): process_image_get_json>: chan="stdout": source="task"
-[2025-05-26, 11:03:47] INFO - Failure caused by 'coroutine' object is not iterable: chan="stdout": source="task"
+[2025-05-26, 11:33:33] INFO - Error: 'AgentRunResult' object is not iterable: chan="stdout": source="task"
+[2025-05-26, 11:33:33] INFO - Task instance in failure state: chan="stdout": source="task"
+[2025-05-26, 11:33:33] INFO - Task start: chan="stdout": source="task"
+[2025-05-26, 11:33:33] INFO - Task:<Task(AgentDecoratedOperator): process_image_get_json>: chan="stdout": source="task"
+[2025-05-26, 11:33:33] INFO - Failure caused by 'AgentRunResult' object is not iterable: chan="stdout": source="task"
