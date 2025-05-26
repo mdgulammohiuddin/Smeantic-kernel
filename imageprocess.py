@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY not set")
-os.environ["GROQ_API_KEY"] = GROQ_API_KEY
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not set")
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 
@@ -84,8 +84,7 @@ def extract_text_from_image(image_source: str) -> Tuple[str, Dict[str, Any]]:
         }
 
 image_agent = PydanticAIAgent(
-    model="llama-3.3-70b-versatile",
-    api_key=GROQ_API_KEY,
+    model="gpt-4o",
     tools=[extract_text_from_image],
     system_prompt="""
 You are an image text processing system. Your goal is to extract text from an image and analyze it based on a user query.
