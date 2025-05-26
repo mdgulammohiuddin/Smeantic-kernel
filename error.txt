@@ -1,10 +1,21 @@
-[2025-05-23, 12:00:25] ERROR - Task failed with exception: source="task"
-TypeError: Returned output was type <class 'str'> expected dictionary for multiple_outputs
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 849 in run
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=image_processor/run_id=manual__2025-05-26T05:15:45.413537+00:00/task_id=process_image_get_json/attempt=1.log"]
+[2025-05-26, 10:45:54] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-26, 10:45:54] INFO - Filling up the DagBag from /app/fdi/dags/image_processing_agent.py: source="airflow.models.dagbag.DagBag"
+[2025-05-26, 10:45:58] WARNING - Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.: source="easyocr.easyocr"
+[2025-05-26, 10:46:01] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='image_processor', key='return_value') }}: chan="stdout": source="task"
+[2025-05-26, 10:46:01] ERROR - Agent processing error: Agent.run() got an unexpected keyword argument 'query': source="unusual_prefix_29c40ef63cca9a19d7bfd2988dec9304d916a7fd_image_processing_agent"
+TypeError: Agent.run() got an unexpected keyword argument 'query'
+File "/app/fdi/dags/image_processing_agent.py", line 162 in process_image_get_json
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1180 in _push_xcom_if_needed
-
-[2025-05-23, 12:00:25] INFO - Task instance in failure state: chan="stdout": source="task"
-[2025-05-23, 12:00:25] INFO - Task start: chan="stdout": source="task"
-[2025-05-23, 12:00:25] INFO - Task:<Task(AgentDecoratedOperator): process_document>: chan="stdout": source="task"
-[2025-05-23, 12:00:25] INFO - Failure caused by Returned output was type <class 'str'> expected dictionary for multiple_outputs: chan="stdout": source="task"
+[2025-05-26, 10:46:01] INFO - Done. Returned value was: {"content": "Agent processing error: Agent.run() got an unexpected keyword argument 'query'", "metrics": {"error_message": "Agent processing error: Agent.run() got an unexpected keyword argument 'query'"}}: source="airflow.task.operators.airflow_ai_sdk.operators.agent.AgentDecoratedOperator"
+[2025-05-26, 10:46:01] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-26, 10:46:01] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-26, 10:46:01] INFO - Current task name:process_image_get_json: chan="stdout": source="task"
+[2025-05-26, 10:46:01] INFO - Dag name:image_processor: chan="stdout": source="task"
+[2025-05-26, 10:46:01] INFO - Executing LLM call: chan="stdout": source="task"
+[2025-05-26, 10:46:01] INFO - Prompt: {"content": "Agent processing error: Agent.run() got an unexpected keyword argument 'query'", "metrics": {"error_message": "Agent processing error: Agent.run() got an unexpected keyword argument 'query'"}}: chan="stdout": source="task"
+[2025-05-26, 10:46:03] INFO - Result: AgentRunResult(data='{"content": "An error occurred during processing: Agent.run() got an unexpected keyword argument \'query\'", "metrics": {"file_type": null, "file_size": null, "parse_time": null, "parse_start": null, "error_message": "Agent processing error: Agent.run() got an unexpected keyword argument \'query\'"}}'): chan="stdout": source="task"
+[2025-05-26, 10:46:03] INFO - Pushing xcom: ti="RuntimeTaskInstance(id=UUID('01970b04-ad9c-7faf-9815-53f5855ae205'), task_id='process_image_get_json', dag_id='image_processor', run_id='manual__2025-05-26T05:15:45.413537+00:00', try_number=1, map_index=-1, hostname='VM-Paraxel-Dev.ko0e2y0myx1uriyrvpsvhh4vac.bx.internal.cloudapp.net', context_carrier=None, task=<Task(AgentDecoratedOperator): process_image_get_json>, bundle_instance=LocalDagBundle(name=dags-folder), max_tries=1, start_date=datetime.datetime(2025, 5, 26, 5, 15, 54, 634817, tzinfo=TzInfo(UTC)), end_date=None, state=<TaskInstanceState.RUNNING: 'running'>, is_mapped=False, rendered_map_index=None)": source="task"
+[2025-05-26, 10:46:03] INFO - Task instance in success state: chan="stdout": source="task"
+[2025-05-26, 10:46:03] INFO -  Previous state of the Task instance: TaskInstanceState.RUNNING: chan="stdout": source="task"
+[2025-05-26, 10:46:03] INFO - Task operator:<Task(AgentDecoratedOperator): process_image_get_json>: chan="stdout": source="task"
