@@ -103,8 +103,8 @@ The "metrics" key should contain an object with the following fields:
   "error_message": (string, describe any error that occurred during extraction, or null if no errors)
 
 Follow these steps strictly:
-1. Use `extract_text_from_image` with the image path. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields.
-2. If extraction is successful, analyze the extracted text against the user query for "content".
+1. Use `extract_text_from_image` with the image path provided in the prompt. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields.
+2. If extraction is successful, analyze the extracted text against the user query provided in the prompt for "content".
 3. Construct the final JSON object string as described above.
 
 Tool usage sequence: extract_text_from_image -> analysis.
@@ -159,10 +159,13 @@ def image_processing_pipeline():
     def process_image_get_json(context: Dict[str, Any]) -> str:
         """Agent task that processes the image and returns a JSON string."""
         try:
-            result = image_agent.run(
-                query=context['user_query'],
-                image_path=context['image_path']
-            )
+            # Pass context as a prompt string, similar to transcript processor
+            prompt = f"""
+            User Query: {context['user_query']}
+            Image Path: {context['image_path']}
+            Process Start Time (UTC): {context['process_start']}
+            """
+            result = image_agent.run(prompt)
             return result
         except Exception as e:
             logger.error(f"Agent processing error: {e}", exc_info=True)
