@@ -1,25 +1,112 @@
-Log message source details: sources=["/app/fdi/airflow/logs/dag_id=transcript_processor_embed/run_id=manual__2025-05-26T09:05:42.601401+00:00/task_id=embed_output/attempt=2.log"]
-[2025-05-26, 14:39:33] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
-[2025-05-26, 14:39:33] INFO - Filling up the DagBag from /app/fdi/dags/transcript_embed.py: source="airflow.models.dagbag.DagBag"
-[2025-05-26, 14:39:44] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='transcript_processor_embed', key='return_value') }}: chan="stdout": source="task"
-[2025-05-26, 14:39:44] WARNING - No valid content to embed: source="unusual_prefix_069cf4cae5392d299b2db8c38c8b46002bf7dc2c_transcript_embed"
-[2025-05-26, 14:39:44] INFO - Done. Returned value was: []: source="airflow.task.operators.airflow_ai_sdk.operators.embed.EmbedDecoratedOperator"
-[2025-05-26, 14:39:44] ERROR - Task failed with exception: source="task"
-TypeError: Attribute `text` must be of type `str`
+prepare_context:
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=transcript_processor_embed/run_id=manual__2025-05-26T09:23:29.641008+00:00/task_id=prepare_context/attempt=1.log"]
+[2025-05-26, 14:53:30] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-26, 14:53:30] INFO - Filling up the DagBag from /app/fdi/dags/transcript_embed.py: source="airflow.models.dagbag.DagBag"
+[2025-05-26, 14:53:47] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='transcript_processor_embed', key='return_value') }}: chan="stdout": source="task"
+[2025-05-26, 14:53:47] INFO - Done. Returned value was: {'file_path': '/app/fdi/assets/meeting_transcript.docx', 'user_query': 'List all action items', 'process_start_time': '2025-05-26T09:23:47.882092+00:00'}: source="airflow.task.operators.airflow.providers.standard.decorators.python._PythonDecoratedOperator"
+[2025-05-26, 14:53:47] INFO - Pushing xcom: ti="RuntimeTaskInstance(id=UUID('01970be7-7cf8-7292-84c1-b82dae544b9a'), task_id='prepare_context', dag_id='transcript_processor_embed', run_id='manual__2025-05-26T09:23:29.641008+00:00', try_number=1, map_index=-1, hostname='VM-Paraxel-Dev.ko0e2y0myx1uriyrvpsvhh4vac.bx.internal.cloudapp.net', context_carrier=None, task=<Task(_PythonDecoratedOperator): prepare_context>, bundle_instance=LocalDagBundle(name=dags-folder), max_tries=1, start_date=datetime.datetime(2025, 5, 26, 9, 23, 30, 105737, tzinfo=TzInfo(UTC)), end_date=None, state=<TaskInstanceState.RUNNING: 'running'>, is_mapped=False, rendered_map_index=None)": source="task"
+[2025-05-26, 14:53:48] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-26, 14:53:48] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-26, 14:53:48] INFO - Current task name:prepare_context: chan="stdout": source="task"
+[2025-05-26, 14:53:48] INFO - Dag name:transcript_processor_embed: chan="stdout": source="task"
+[2025-05-26, 14:53:48] INFO - Task instance in success state: chan="stdout": source="task"
+[2025-05-26, 14:53:48] INFO -  Previous state of the Task instance: TaskInstanceState.RUNNING: chan="stdout": source="task"
+[2025-05-26, 14:53:48] INFO - Task operator:<Task(_PythonDecoratedOperator): prepare_context>: chan="stdout": source="task"
+parse_agent_json_output:
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=transcript_processor_embed/run_id=manual__2025-05-26T09:23:29.641008+00:00/task_id=parse_agent_json_output/attempt=1.log"]
+[2025-05-26, 14:54:57] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-26, 14:54:57] INFO - Filling up the DagBag from /app/fdi/dags/transcript_embed.py: source="airflow.models.dagbag.DagBag"
+[2025-05-26, 14:55:10] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='transcript_processor_embed', key='return_value') }}: chan="stdout": source="task"
+[2025-05-26, 14:55:10] INFO - Parsed agent output: {'content': 'An error occurred: the file path provided does not exist.', 'metrics': {'file_type': None, 'file_size': None, 'parse_time': None, 'parse_start': None, 'clean_time': None, 'clean_start': None, 'original_length': None, 'cleaned_length': None, 'error_message': 'File path could not be found or accessed.'}}: source="unusual_prefix_069cf4cae5392d299b2db8c38c8b46002bf7dc2c_transcript_embed"
+[2025-05-26, 14:55:10] INFO - Done. Returned value was: {'content': 'An error occurred: the file path provided does not exist.', 'metrics': {'file_type': None, 'file_size': None, 'parse_time': None, 'parse_start': None, 'clean_time': None, 'clean_start': None, 'original_length': None, 'cleaned_length': None, 'error_message': 'File path could not be found or accessed.'}}: source="airflow.task.operators.airflow.providers.standard.decorators.python._PythonDecoratedOperator"
+[2025-05-26, 14:55:10] INFO - Pushing xcom: ti="RuntimeTaskInstance(id=UUID('01970be7-7cfa-7be0-a8cf-a3a605b7eaa9'), task_id='parse_agent_json_output', dag_id='transcript_processor_embed', run_id='manual__2025-05-26T09:23:29.641008+00:00', try_number=1, map_index=-1, hostname='VM-Paraxel-Dev.ko0e2y0myx1uriyrvpsvhh4vac.bx.internal.cloudapp.net', context_carrier=None, task=<Task(_PythonDecoratedOperator): parse_agent_json_output>, bundle_instance=LocalDagBundle(name=dags-folder), max_tries=1, start_date=datetime.datetime(2025, 5, 26, 9, 24, 57, 287179, tzinfo=TzInfo(UTC)), end_date=None, state=<TaskInstanceState.RUNNING: 'running'>, is_mapped=False, rendered_map_index=None)": source="task"
+[2025-05-26, 14:55:10] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-26, 14:55:10] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-26, 14:55:10] INFO - Current task name:parse_agent_json_output: chan="stdout": source="task"
+[2025-05-26, 14:55:10] INFO - Dag name:transcript_processor_embed: chan="stdout": source="task"
+[2025-05-26, 14:55:10] INFO - Task instance in success state: chan="stdout": source="task"
+[2025-05-26, 14:55:10] INFO -  Previous state of the Task instance: TaskInstanceState.RUNNING: chan="stdout": source="task"
+[2025-05-26, 14:55:10] INFO - Task operator:<Task(_PythonDecoratedOperator): parse_agent_json_output>: chan="stdout": source="task"
+embed_output:
+Log message source details: sources=["/app/fdi/airflow/logs/dag_id=transcript_processor_embed/run_id=manual__2025-05-26T09:23:29.641008+00:00/task_id=embed_output/attempt=2.log"]
+[2025-05-26, 14:57:22] INFO - DAG bundles loaded: dags-folder, example_dags: source="airflow.dag_processing.bundles.manager.DagBundlesManager"
+[2025-05-26, 14:57:22] INFO - Filling up the DagBag from /app/fdi/dags/transcript_embed.py: source="airflow.models.dagbag.DagBag"
+[2025-05-26, 14:57:36] INFO - {{ task_instance.xcom_pull(task_ids='format_final_output', dag_id='transcript_processor_embed', key='return_value') }}: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Embedding input: {'content': 'An error occurred: the file path provided does not exist.', 'metrics': {'file_type': None, 'file_size': None, 'parse_time': None, 'parse_start': None, 'clean_time': None, 'clean_start': None, 'original_length': None, 'cleaned_length': None, 'error_message': 'File path could not be found or accessed.'}}: source="unusual_prefix_069cf4cae5392d299b2db8c38c8b46002bf7dc2c_transcript_embed"
+[2025-05-26, 14:57:36] WARNING - No valid content to embed: An error occurred: the file path provided does not exist.: source="unusual_prefix_069cf4cae5392d299b2db8c38c8b46002bf7dc2c_transcript_embed"
+[2025-05-26, 14:57:36] INFO - Done. Returned value was: : source="airflow.task.operators.airflow_ai_sdk.operators.embed.EmbedDecoratedOperator"
+[2025-05-26, 14:57:36] INFO - Use pytorch device_name: cpu: source="sentence_transformers.SentenceTransformer"
+[2025-05-26, 14:57:36] INFO - Load pretrained SentenceTransformer: text-embedding-ada-002: source="sentence_transformers.SentenceTransformer"
+[2025-05-26, 14:57:36] INFO - Task instance is in running state: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Current task name:embed_output: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Dag name:transcript_processor_embed: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Executing embedding: chan="stdout": source="task"
+[2025-05-26, 14:57:36] WARNING - No sentence-transformers model found with name sentence-transformers/text-embedding-ada-002. Creating a new one with mean pooling.: source="sentence_transformers.SentenceTransformer"
+[2025-05-26, 14:57:36] ERROR - Task failed with exception: source="task"
+OSError: sentence-transformers/text-embedding-ada-002 is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 838 in run
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/execution_time/task_runner.py", line 1130 in _execute_task
 
 File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow/sdk/bases/operator.py", line 408 in wrapper
 
-File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 50 in execute
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 58 in execute
 
-[2025-05-26, 14:39:44] INFO - Task instance is in running state: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO -  Previous state of the Task instance: TaskInstanceState.QUEUED: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO - Current task name:embed_output: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO - Dag name:transcript_processor_embed: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO - Executing embedding: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO - Task instance in failure state: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO - Task start: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO - Task:<Task(EmbedDecoratedOperator): embed_output>: chan="stdout": source="task"
-[2025-05-26, 14:39:44] INFO - Failure caused by Attribute `text` must be of type `str`: chan="stdout": source="task"
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/airflow_ai_sdk/operators/embed.py", line 54 in execute
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/sentence_transformers/SentenceTransformer.py", line 321 in __init__
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/sentence_transformers/SentenceTransformer.py", line 1606 in _load_auto_model
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/sentence_transformers/models/Transformer.py", line 80 in __init__
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/sentence_transformers/models/Transformer.py", line 121 in _load_config
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/transformers/utils/peft_utils.py", line 88 in find_adapter_config_file
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/transformers/utils/hub.py", line 312 in cached_file
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/transformers/utils/hub.py", line 502 in cached_files
+
+RepositoryNotFoundError: 401 Client Error. (Request ID: Root=1-68343408-1e44235d2face2d97c301742;6b2d0262-ba3c-4ee6-98b8-72fdb1ab3fd0)
+
+Repository Not Found for url: https://huggingface.co/sentence-transformers/text-embedding-ada-002/resolve/main/adapter_config.json.
+Please make sure you specified the correct `repo_id` and `repo_type`.
+If you are trying to access a private or gated repo, make sure you are authenticated. For more details, see https://huggingface.co/docs/huggingface_hub/authentication
+Invalid username or password.
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/transformers/utils/hub.py", line 470 in cached_files
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 114 in _inner_fn
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1008 in hf_hub_download
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1115 in _hf_hub_download_to_cache_dir
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1643 in _raise_on_head_call_error
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1531 in _get_metadata_or_catch_error
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 114 in _inner_fn
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1448 in get_hf_file_metadata
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 286 in _request_wrapper
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 310 in _request_wrapper
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 459 in hf_raise_for_status
+
+HTTPError: 401 Client Error: Unauthorized for url: https://huggingface.co/sentence-transformers/text-embedding-ada-002/resolve/main/adapter_config.json
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 409 in hf_raise_for_status
+
+File "/app/fdi/fdi_venv/lib/python3.12/site-packages/requests/models.py", line 1024 in raise_for_status
+
+[2025-05-26, 14:57:36] INFO - Error: sentence-transformers/text-embedding-ada-002 is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models': chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Task instance in failure state: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Task start: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Task:<Task(EmbedDecoratedOperator): embed_output>: chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - Failure caused by sentence-transformers/text-embedding-ada-002 is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models': chan="stdout": source="task"
+[2025-05-26, 14:57:36] INFO - If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`: chan="stdout": source="task"
