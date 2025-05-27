@@ -426,4 +426,12 @@ Generated at: {datetime.now(timezone.utc).isoformat()}
 
     # DAG execution flow
     context_data = prepare_context()
-    agent_json_result = process_document_get_js
+    agent_json_result = process_document_get_json(context_data)
+    parsed_agent_result = parse_agent_json_output(agent_json_result)
+    embedding_result = create_embeddings(parsed_agent_result)
+    store_embeddings_in_faiss(parsed_agent_result, embedding_result)
+    final_report = format_final_output(parsed_agent_result, embedding_result, context_data)
+    print(final_report)
+
+# Instantiate DAG
+transcript_processor_dag = transcript_pipeline()
