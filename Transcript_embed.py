@@ -1,6 +1,4 @@
 import os
-import time
-from datetime import datetime, timedelta, timezone
 import json
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
@@ -16,6 +14,7 @@ from langchain_openai import OpenAIEmbeddings
 import faiss
 from langchain_community.docstore import InMemoryDocstore
 from langchain_community.vectorstores import FAISS
+from datetime import datetime, timedelta, timezone
 
 # Download required NLTK data
 try:
@@ -66,10 +65,6 @@ ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "asse
 class AgentOutputMetricsStructure:
     file_type: Optional[str] = None
     file_size: Optional[int] = None
-    parse_time: Optional[float] = None
-    parse_start: Optional[str] = None
-    clean_time: Optional[float] = None
-    clean_start: Optional[str] = None
     original_length: Optional[int] = None
     cleaned_length: Optional[int] = None
     error_message: Optional[str] = None
@@ -80,47 +75,29 @@ class AgentOutputStructure:
 
 def parse_document(file_path: str, expected_file_path: str = None) -> Tuple[str, Dict[str, Any]]:
     """Parse document and return content with metadata, validate file path"""
-    start_time_func = time.time()
-    current_utc_time = datetime.now(timezone.utc).isoformat()
     if expected_file_path and os.path.normpath(file_path) != os.path.normpath(expected_file_path):
         error_msg = f"Unauthorized file access attempted: {file_path}. Expected: {expected_file_path}"
         custom_logger.error(error_msg)
-        return error_msg, {
-            "error": error_msg,
-            "parse_time": time.time() - start_time_func,
-            "parse_start": current_utc_time
-        }
+        return error_msg, {"error": error_msg}
     try:
         if not os.path.exists(file_path):
             error_msg = f"File not found at {file_path}"
             custom_logger.error(error_msg)
-            return error_msg, {
-                "error": error_msg,
-                "parse_time": time.time() - start_time_func,
-                "parse_start": current_utc_time
-            }
+            return error_msg, {"error": error_msg}
         elements = partition(filename=file_path)
         content = "\n\n".join([str(e) for e in elements])
         custom_logger.info(f"Parsed document: {file_path}, length={len(content)}")
         return content, {
-            "parse_time": time.time() - start_time_func,
             "file_size": os.path.getsize(file_path),
-            "file_type": os.path.splitext(file_path)[1][1:].upper(),
-            "parse_start": current_utc_time
+            "file_type": os.path.splitext(file_path)[1][1:].upper()
         }
     except Exception as e:
         error_msg = f"Parsing error for {file_path}: {e}"
         custom_logger.error(error_msg, exc_info=True)
-        return error_msg, {
-            "error": error_msg,
-            "parse_time": time.time() - start_time_func,
-            "parse_start": current_utc_time
-        }
+        return error_msg, {"error": error_msg}
 
 def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
     """Clean parsed content using NLTK for stopword removal and additional cleaning steps"""
-    start_time_func = time.time()
-    current_utc_time = datetime.now(timezone.utc).isoformat()
     try:
         timestamp_pattern = r'\b\d{1,2}:\d{2}(:\d{2})?(\.\d{1,3})?\b'
         content = re.sub(timestamp_pattern, '', raw_content)
@@ -137,64 +114,50 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
         cleaned = ' '.join(filtered_tokens)
         custom_logger.info(f"Cleaned content: original_length={len(raw_content)}, cleaned_length={len(cleaned)}")
         return cleaned, {
-            "clean_time": time.time() - start_time_func,
             "original_length": len(raw_content),
-            "cleaned_length": len(cleaned),
-            "clean_start": current_utc_time
+            "cleaned_length": len(cleaned)
         }
     except Exception as e:
         error_msg = f"Cleaning error: {e}"
         custom_logger.error(error_msg, exc_info=True)
-        return error_msg, {
-            "error": error_msg,
-            "clean_time": time.time() - start_time_func,
-            "clean_start": current_utc_time
-        }
+        return error_msg, {"error": error_msg}
 
 document_agent = PydanticAIAgent(
     model="gpt-4o",
     tools=[parse_document, clean_content],
     system_prompt="""
-You are a transcript processing system. Your goal is to process a single document, clean its content, and analyze it based on a user query.
-You MUST process ONLY the file path provided in the prompt and no other files. Any attempt to process a different file is strictly prohibited and must result in an error.
-You MUST return your entire response as a single, valid JSON object (string) for the provided file only.
-Do NOT use Markdown formatting for the overall JSON structure.
-The JSON object must have two top-level keys: "content" and "metrics".
+You are a transcript processing system. Your goal is to process EXACTLY ONE document specified in the prompt, clean its content, and analyze it based on the user query.
+You MUST process ONLY the file path provided in the 'File Path' field of the prompt. Processing any other file is strictly forbidden and must result in an immediate error.
+You MUST return a single, valid JSON object (string) for the specified file only, with no Markdown formatting in the JSON structure.
+The JSON object must have two keys: "content" and "metrics".
 
-The "content" key must contain a string with query-relevant information in bullet points (this string can contain Markdown).
+The "content" key must contain a string with query-relevant information in bullet points (this string may use Markdown).
 If an error occurs, "content" must summarize the error.
 
 The "metrics" key must contain an object with:
   "file_type": (string, from parse_document metadata, or null if error)
   "file_size": (integer, from parse_document metadata, or null if error)
-  "parse_time": (float, duration from parse_document metadata, or null if error)
-  "parse_start": (string, ISO datetime from parse_document metadata, or null if error)
-  "clean_time": (float, duration from clean_content metadata, or null if error before cleaning)
-  "clean_start": (string, ISO datetime from clean_content metadata, or null if error before cleaning)
   "original_length": (integer, from clean_content metadata, or null if error before cleaning)
   "cleaned_length": (integer, from clean_content metadata, or null if error before cleaning)
   "error_message": (string, describe any error during parsing or cleaning, or null if no errors)
 
-Follow these steps strictly:
-1. Extract the file path from the prompt. Validate that it matches the provided file path exactly.
-2. Use `parse_document` with the validated file path, passing the expected file path as an argument to enforce validation. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 3 if parsing fails.
-3. If parsing succeeds, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for clean-related metric fields.
-4. If cleaning succeeds, analyze the cleaned content against the user query provided in the prompt for "content".
-5. Construct the final JSON object string as described above for the provided file only.
+Follow these steps:
+1. Extract and validate the file path from the 'File Path' field in the prompt. If the file path is missing or invalid, return an error JSON.
+2. Call `parse_document` with the validated file path, passing the same file path as `expected_file_path`. If parsing fails, return an error JSON with appropriate metrics.
+3. If parsing succeeds, call `clean_content` on the parsed content. If cleaning fails, return an error JSON with metrics.
+4. If cleaning succeeds, analyze the cleaned content for the user query from the 'User Query' field and generate bullet-pointed content.
+5. Return a JSON string with the content and metrics for the specified file only.
 
-Tool usage sequence (if successful): parse_document -> clean_content -> analysis.
-Do NOT invoke `parse_document` for any file other than the one specified in the prompt.
-If an unauthorized file is detected, return an error JSON immediately.
-Ensure your output is ONLY the JSON string for the specified file. Example:
+Tool sequence: parse_document -> clean_content -> analysis.
+NEVER call `parse_document` for any file other than the one in the prompt's 'File Path' field.
+If an unauthorized file path is detected, return an error JSON immediately.
+
+Example output:
 {
   "content": "- Action item 1\n- Action item 2",
   "metrics": {
     "file_type": "DOCX",
     "file_size": 12345,
-    "parse_time": 1.23,
-    "parse_start": "2025-01-01T12:00:00Z",
-    "clean_time": 0.45,
-    "clean_start": "2025-01-01T12:00:02Z",
     "original_length": 1000,
     "cleaned_length": 800,
     "error_message": null
@@ -210,7 +173,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
-    "execution_timeout": timedelta(minutes=15),  # Increased to handle potential delays
+    "execution_timeout": timedelta(minutes=15),
 }
 
 @dag(
@@ -285,11 +248,9 @@ Process Start Time (UTC): {process_start_time}
 """
             custom_logger.info(f"Agent prompt: {prompt}")
             try:
-                # Pass expected file path to tools via environment variable
                 os.environ['EXPECTED_FILE_PATH'] = file_path
                 result = document_agent.run_sync(prompt, timeout=300)
                 custom_logger.info(f"Agent output: {result.data}")
-                # Clear environment variable to prevent leakage
                 os.environ.pop('EXPECTED_FILE_PATH', None)
                 return result.data
             except Exception as llm_error:
@@ -381,8 +342,6 @@ Process Start Time (UTC): {process_start_time}
             file_size_kb_str = f"{file_size_bytes / 1024:.2f} KB"
         elif file_size_bytes is not None:
             file_size_kb_str = "Invalid Size Data"
-        parse_time_str = f"{metrics_data.get('parse_time'):.2f}s" if metrics_data.get('parse_time') is not None else "N/A"
-        clean_time_str = f"{metrics_data.get('clean_time'):.2f}s" if metrics_data.get('clean_time') is not None else "N/A"
         reduction_str = "N/A"
         original_len = metrics_data.get('original_length')
         cleaned_len = metrics_data.get('cleaned_length')
@@ -395,22 +354,13 @@ Process Start Time (UTC): {process_start_time}
 ### File Metadata
 - Type: {metrics_data.get('file_type', 'N/A')}
 - Size: {file_size_kb_str}
-- Process Started (Overall): {context['process_start_time']}
+- Process Started: {context['process_start_time']}
 
 ### Processing Metrics
-1. Parsing Stage:
-   - Duration: {parse_time_str}
-   - Started: {metrics_data.get('parse_start', 'N/A')}
-
-2. Cleaning Stage:
-   - Duration: {clean_time_str}
-   - Started: {metrics_data.get('clean_start', 'N/A')}
-   - Original Length: {metrics_data.get('original_length', 'N/A')} characters
-   - Cleaned Length: {metrics_data.get('cleaned_length', 'N/A')} characters
-   - Content Reduction: {reduction_str}
-
-3. Embedding Stage:
-   - Embedding: {embedding_str}
+- Original Length: {metrics_data.get('original_length', 'N/A')} characters
+- Cleaned Length: {metrics_data.get('cleaned_length', 'N/A')} characters
+- Content Reduction: {reduction_str}
+- Embedding: {embedding_str}
 
 {f"### Errors during Processing\n- {metrics_data.get('error_message')}" if metrics_data.get('error_message') else "No errors reported by agent."}
 
