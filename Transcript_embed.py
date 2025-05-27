@@ -65,6 +65,7 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
             }
         elements = partition(filename=file_path)
         content = "\n\n".join([str(e) for e in elements])
+        logger.info(f"Parsed document: {file_path}, length={len(content)}")
         return content, {
             "parse_time": time.time() - start_time_func,
             "file_size": os.path.getsize(file_path),
@@ -106,7 +107,7 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
         filtered_tokens = [word for word in tokens if word not in words_to_remove]
 
         cleaned = ' '.join(filtered_tokens)
-
+        logger.info(f"Cleaned content: original_length={len(raw_content)}, cleaned_length={len(cleaned)}")
         return cleaned, {
             "clean_time": time.time() - start_time_func,
             "original_length": len(raw_content),
@@ -177,6 +178,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
+    "execution_timeout": timedelta(minutes=10),  # Increased timeout
 }
 
 @dag(
@@ -239,9 +241,18 @@ File Path: {file_path}
 Process Start Time (UTC): {process_start_time}
 """
             logger.info(f"Agent prompt: {prompt}")
-            result = document_agent.run_sync(prompt)
-            logger.info(f"Agent output: {result.data}")
-            return result.data
+            try:
+                result = document_agent.run_sync(prompt, timeout=300)  # 5-minute timeout
+                logger.info(f"Agent output: {result.data}")
+                return result.data
+            except Exception as llm_error:
+                logger.error(f"LLM processing error: {llm_error}", exc_info=True)
+                return json.dumps({
+                    "content": f"LLM processing error: {str(llm_error)}",
+                    "metrics": {
+                        "error_message": f"LLM processing error: {str(llm_error)}"
+                    }
+                })
         except Exception as e:
             logger.error(f"Agent processing error: {e}", exc_info=True)
             return json.dumps({
