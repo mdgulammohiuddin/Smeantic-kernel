@@ -1,7 +1,7 @@
 import os
 import time
-import json
 from datetime import datetime, timedelta, timezone
+import json
 from airflow.decorators import dag, task
 from dotenv import load_dotenv
 from unstructured.partition.auto import partition
@@ -12,7 +12,10 @@ import re
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-import openai
+from langchain_openai import OpenAIEmbeddings
+import faiss
+from langchain_community.docstore import InMemoryDocstore
+from langchain_community.vectorstores import FAISS
 
 # Download required NLTK data
 try:
@@ -22,18 +25,41 @@ except LookupError:
     nltk.download('stopwords')
     nltk.download('punkt')
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Custom Logger Setup
+CUSTOM_LOG_DIR_NAME = "dag_run_logs"
+PROJECT_ROOT_GUESS = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CUSTOM_LOG_BASE_DIR = os.path.join(PROJECT_ROOT_GUESS, "Backend")
+CUSTOM_LOG_DIR = os.path.join(CUSTOM_LOG_BASE_DIR, CUSTOM_LOG_DIR_NAME)
+
+custom_logger = logging.getLogger('TranscriptProcessorCustomLogger')
+custom_logger.setLevel(logging.INFO)
+
+def setup_custom_file_handler(logger_instance, log_file_name_prefix="transcript_processor"):
+    if not logger_instance.handlers:
+        try:
+            if not os.path.exists(CUSTOM_LOG_DIR):
+                os.makedirs(CUSTOM_LOG_DIR, exist_ok=True)
+            log_file_path = os.path.join(CUSTOM_LOG_DIR, f"{log_file_name_prefix}_{datetime.now().strftime('%Y%m%d')}.log")
+            file_handler = logging.FileHandler(log_file_path)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            file_handler.setFormatter(formatter)
+            logger_instance.addHandler(file_handler)
+            logger_instance.info(f"Custom file logger initialized. Logging to: {log_file_path}")
+        except Exception as e:
+            print(f"CRITICAL: Error setting up custom file logger: {e}")
+
+setup_custom_file_handler(custom_logger)
+logging.getLogger('pydantic_ai').setLevel(logging.DEBUG)
+logging.getLogger('openai').setLevel(logging.DEBUG)
+logging.getLogger('unstructured').setLevel(logging.INFO)
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
+    custom_logger.error("OPENAI_API_KEY not set")
     raise ValueError("OPENAI_API_KEY not set")
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-
-# Initialize OpenAI client
-openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 
@@ -58,14 +84,16 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
     current_utc_time = datetime.now(timezone.utc).isoformat()
     try:
         if not os.path.exists(file_path):
-            return f"Error: File not found at {file_path}", {
-                "error": f"File not found at {file_path}",
+            error_msg = f"File not found at {file_path}"
+            custom_logger.error(error_msg)
+            return error_msg, {
+                "error": error_msg,
                 "parse_time": time.time() - start_time_func,
                 "parse_start": current_utc_time
             }
         elements = partition(filename=file_path)
         content = "\n\n".join([str(e) for e in elements])
-        logger.info(f"Parsed document: {file_path}, length={len(content)}")
+        custom_logger.info(f"Parsed document: {file_path}, length={len(content)}")
         return content, {
             "parse_time": time.time() - start_time_func,
             "file_size": os.path.getsize(file_path),
@@ -73,41 +101,33 @@ def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
             "parse_start": current_utc_time
         }
     except Exception as e:
-        logger.error(f"Parsing error for {file_path}: {e}", exc_info=True)
-        return f"Parsing error: {str(e)}", {
-            "error": f"Parsing error: {str(e)}",
+        error_msg = f"Parsing error for {file_path}: {e}"
+        custom_logger.error(error_msg, exc_info=True)
+        return error_msg, {
+            "error": error_msg,
             "parse_time": time.time() - start_time_func,
             "parse_start": current_utc_time
         }
 
 def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
-    """Clean parsed content using NLTK for stopword removal and additional cleaning steps, return with metrics"""
+    """Clean parsed content using NLTK for stopword removal and additional cleaning steps"""
     start_time_func = time.time()
     current_utc_time = datetime.now(timezone.utc).isoformat()
     try:
-        # Remove timestamps (e.g., 12:34:56, 12:34, or HH:MM:SS.mmm)
         timestamp_pattern = r'\b\d{1,2}:\d{2}(:\d{2})?(\.\d{1,3})?\b'
         content = re.sub(timestamp_pattern, '', raw_content)
-
-        # Remove special characters and punctuation, keep alphanumeric and spaces
         content = re.sub(r'[^\w\s]', '', content)
-
-        # Normalize whitespace
         content = re.sub(r'\s+', ' ', content).strip()
-
-        # Tokenize and remove stopwords and filler words
         stop_words = set(stopwords.words('english'))
         filler_words = {
             'um', 'uh', 'like', 'you know', 'so', 'actually', 'basically',
             'i mean', 'kind of', 'sort of', 'well', 'okay'
         }
         words_to_remove = stop_words.union(filler_words)
-
         tokens = word_tokenize(content.lower())
         filtered_tokens = [word for word in tokens if word not in words_to_remove]
-
         cleaned = ' '.join(filtered_tokens)
-        logger.info(f"Cleaned content: original_length={len(raw_content)}, cleaned_length={len(cleaned)}")
+        custom_logger.info(f"Cleaned content: original_length={len(raw_content)}, cleaned_length={len(cleaned)}")
         return cleaned, {
             "clean_time": time.time() - start_time_func,
             "original_length": len(raw_content),
@@ -115,9 +135,10 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
             "clean_start": current_utc_time
         }
     except Exception as e:
-        logger.error(f"Cleaning error: {e}", exc_info=True)
-        return f"Cleaning error: {str(e)}", {
-            "error": f"Cleaning error: {str(e)}",
+        error_msg = f"Cleaning error: {e}"
+        custom_logger.error(error_msg, exc_info=True)
+        return error_msg, {
+            "error": error_msg,
             "clean_time": time.time() - start_time_func,
             "clean_start": current_utc_time
         }
@@ -178,7 +199,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
-    "execution_timeout": timedelta(minutes=10),  # Increased timeout
+    "execution_timeout": timedelta(minutes=10),
 }
 
 @dag(
@@ -187,7 +208,7 @@ default_args = {
     schedule=None,
     start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     catchup=False,
-    tags=["transcript", "ai-agent", "json-output"],
+    tags=["transcript", "ai-agent", "json-output", "embedding", "faiss"],
     params={
         "file_name": "meeting_transcript.docx",
         "user_query": "List all action items"
@@ -198,13 +219,26 @@ def transcript_pipeline():
     def prepare_context(**kwargs: Dict[str, Any]) -> Dict[str, Any]:
         params = kwargs.get('params', {})
         file_name = params.get('file_name', "meeting_transcript.docx")
-        logger.info(f"Received params: {params}, file_name: {file_name}")
-        file_path = os.path.join(ASSETS_DIR, file_name) if not os.path.isabs(file_name) else file_name
-        if not os.path.exists(file_path):
-            logger.error(f"File not found: {file_path}")
-            file_path = None
+        custom_logger.info(f"Received params: {params}, file_name: {file_name}")
+        if not file_name or (isinstance(file_name, str) and file_name.startswith("{{")):
+            error_msg = f"Invalid file_name: '{file_name}'"
+            custom_logger.error(error_msg)
+            raise ValueError(error_msg)
+        candidate_path = os.path.join(ASSETS_DIR, file_name) if not os.path.isabs(file_name) else file_name
+        if os.path.exists(candidate_path):
+            custom_logger.info(f"File found at: {candidate_path}")
+            file_path = candidate_path
+        else:
+            fallback_path = os.path.join(ASSETS_DIR, os.path.basename(file_name))
+            if os.path.exists(fallback_path):
+                custom_logger.info(f"Main path '{candidate_path}' not found. Using fallback: '{fallback_path}'")
+                file_path = fallback_path
+            else:
+                error_msg = f"File not found. Input: '{file_name}', Checked: '{candidate_path}', Fallback: '{fallback_path}'"
+                custom_logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
         user_query = params.get('user_query', "List all action items")
-        logger.info(f"Prepared context: file_path={file_path}, user_query={user_query}")
+        custom_logger.info(f"Prepared context: file_path={file_path}, user_query={user_query}")
         return {
             "file_path": file_path,
             "user_query": user_query,
@@ -218,48 +252,44 @@ def transcript_pipeline():
             file_path = context['file_path']
             user_query = context['user_query']
             process_start_time = context['process_start_time']
-            logger.info(f"Processing file: {file_path}")
+            custom_logger.info(f"Processing file: {file_path}")
             if not file_path:
-                logger.error("No valid file path provided")
+                error_msg = "No valid file path provided"
+                custom_logger.error(error_msg)
                 return json.dumps({
-                    "content": "Error: No valid file path provided",
-                    "metrics": {
-                        "error_message": "No valid file path provided"
-                    }
+                    "content": error_msg,
+                    "metrics": {"error_message": error_msg}
                 })
             if not os.path.exists(file_path):
-                logger.error(f"File not found: {file_path}")
+                error_msg = f"File not found at {file_path}"
+                custom_logger.error(error_msg)
                 return json.dumps({
-                    "content": f"Error: File not found at {file_path}",
-                    "metrics": {
-                        "error_message": f"File not found at {file_path}"
-                    }
+                    "content": error_msg,
+                    "metrics": {"error_message": error_msg}
                 })
             prompt = f"""
 User Query: {user_query}
 File Path: {file_path}
 Process Start Time (UTC): {process_start_time}
 """
-            logger.info(f"Agent prompt: {prompt}")
+            custom_logger.info(f"Agent prompt: {prompt}")
             try:
-                result = document_agent.run_sync(prompt, timeout=300)  # 5-minute timeout
-                logger.info(f"Agent output: {result.data}")
+                result = document_agent.run_sync(prompt, timeout=300)
+                custom_logger.info(f"Agent output: {result.data}")
                 return result.data
             except Exception as llm_error:
-                logger.error(f"LLM processing error: {llm_error}", exc_info=True)
+                error_msg = f"LLM processing error: {str(llm_error)}"
+                custom_logger.error(error_msg, exc_info=True)
                 return json.dumps({
-                    "content": f"LLM processing error: {str(llm_error)}",
-                    "metrics": {
-                        "error_message": f"LLM processing error: {str(llm_error)}"
-                    }
+                    "content": error_msg,
+                    "metrics": {"error_message": error_msg}
                 })
         except Exception as e:
-            logger.error(f"Agent processing error: {e}", exc_info=True)
+            error_msg = f"Agent processing error: {str(e)}"
+            custom_logger.error(error_msg, exc_info=True)
             return json.dumps({
-                "content": f"Agent processing error: {str(e)}",
-                "metrics": {
-                    "error_message": f"Agent processing error: {str(e)}"
-                }
+                "content": error_msg,
+                "metrics": {"error_message": error_msg}
             })
 
     @task
@@ -267,37 +297,61 @@ Process Start Time (UTC): {process_start_time}
         """Parses the JSON string output from the agent into a dictionary."""
         try:
             result = json.loads(json_string)
-            logger.info(f"Parsed agent output: {result}")
+            custom_logger.info(f"Parsed agent output: {result}")
             return result
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from agent: {e}")
-            logger.error(f"Received string: {json_string}")
+            error_msg = f"JSONDecodeError: {e}. Received: {json_string[:200]}..."
+            custom_logger.error(error_msg)
             return {
                 "content": "Error: Agent returned malformed JSON.",
-                "metrics": {
-                    "error_message": f"JSONDecodeError: {e}. Received: {json_string[:200]}..."
-                }
+                "metrics": {"error_message": error_msg}
             }
 
     @task
-    def embed_output(parsed_result: Dict[str, Any]) -> list:
+    def create_embeddings(parsed_result: Dict[str, Any]) -> list:
         """Generate embeddings for the content field using OpenAI's text-embedding-ada-002."""
-        logger.info(f"Embedding input: {parsed_result}")
+        custom_logger.info(f"Embedding input: {parsed_result}")
         content = parsed_result.get('content', '')
         if not content or "error" in content.lower():
-            logger.warning(f"No valid content to embed: {content}")
+            custom_logger.warning(f"No valid content to embed: {content}")
             return []
         try:
-            response = openai_client.embeddings.create(
-                input=content,
-                model="text-embedding-ada-002"
-            )
-            embedding = response.data[0].embedding
-            logger.info(f"Generated embedding: length={len(embedding)}")
-            return embedding
+            embeddings_client = OpenAIEmbeddings(model="text-embedding-ada-002", openai_api_key=OPENAI_API_KEY)
+            embedding_vector = embeddings_client.embed_query(content)
+            custom_logger.info(f"Generated embedding: length={len(embedding_vector)}")
+            return embedding_vector
         except Exception as e:
-            logger.error(f"Embedding error: {e}", exc_info=True)
+            custom_logger.error(f"Embedding error: {e}", exc_info=True)
             return []
+
+    @task
+    def store_embeddings_in_faiss(original_text: Dict[str, Any], embedding_vector: list) -> None:
+        """Stores the provided text and its pre-computed embedding in an in-memory FAISS index."""
+        content = original_text.get('content', '')
+        if not embedding_vector or not content:
+            custom_logger.warning(f"Empty embedding vector or content. Skipping FAISS storage: content={content[:100]}...")
+            return
+        custom_logger.info(f"Storing embedding in FAISS. Text (first 100 chars): '{content[:100]}...'")
+        try:
+            embeddings_model = OpenAIEmbeddings(model="text-embedding-ada-002", openai_api_key=OPENAI_API_KEY)
+            embedding_dim = len(embedding_vector)
+            if embedding_dim == 0:
+                custom_logger.error("Embedding vector dimension is 0. Cannot create FAISS index.")
+                raise ValueError("Cannot initialize FAISS with 0-dimension embedding.")
+            index = faiss.IndexFlatL2(embedding_dim)
+            docstore = InMemoryDocstore()
+            index_to_docstore_id = {}
+            vector_store = FAISS(
+                embedding_function=embeddings_model,
+                index=index,
+                docstore=docstore,
+                index_to_docstore_id=index_to_docstore_id,
+            )
+            vector_store.add_embeddings(text_embeddings=[(content, embedding_vector)])
+            custom_logger.info(f"Successfully added text and embedding to FAISS. Index has {vector_store.index.ntotal} entries.")
+        except Exception as e:
+            custom_logger.error(f"FAISS storage error: {e}", exc_info=True)
+            raise
 
     @task
     def format_final_output(result_dict: Dict[str, Any], embedding: list, context: Dict[str, Any]) -> str:
@@ -350,13 +404,15 @@ Process Start Time (UTC): {process_start_time}
 Generated at: {datetime.now(timezone.utc).isoformat()}
         """
         print(output)
+        custom_logger.info(f"Final report generated: {output[:200]}...")
         return output
 
     # DAG execution flow
     context_data = prepare_context()
     agent_json_result = process_document_get_json(context_data)
     parsed_agent_result = parse_agent_json_output(agent_json_result)
-    embedding_result = embed_output(parsed_agent_result)
+    embedding_result = create_embeddings(parsed_agent_result)
+    store_embeddings_in_faiss(parsed_agent_result, embedding_result)
     final_report = format_final_output(parsed_agent_result, embedding_result, context_data)
     print(final_report)
 
