@@ -249,7 +249,7 @@ Process Start Time (UTC): {process_start_time}
             custom_logger.info(f"Agent prompt: {prompt}")
             try:
                 os.environ['EXPECTED_FILE_PATH'] = file_path
-                result = document_agent.run_sync(prompt, timeout=300)
+                result = document_agent.run_sync(prompt)
                 custom_logger.info(f"Agent output: {result.data}")
                 os.environ.pop('EXPECTED_FILE_PATH', None)
                 return result.data
