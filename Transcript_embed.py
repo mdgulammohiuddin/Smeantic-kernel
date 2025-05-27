@@ -78,10 +78,18 @@ class AgentOutputStructure:
     content: str
     metrics: AgentOutputMetricsStructure
 
-def parse_document(file_path: str) -> Tuple[str, Dict[str, Any]]:
-    """Parse document and return content with metadata"""
+def parse_document(file_path: str, expected_file_path: str = None) -> Tuple[str, Dict[str, Any]]:
+    """Parse document and return content with metadata, validate file path"""
     start_time_func = time.time()
     current_utc_time = datetime.now(timezone.utc).isoformat()
+    if expected_file_path and os.path.normpath(file_path) != os.path.normpath(expected_file_path):
+        error_msg = f"Unauthorized file access attempted: {file_path}. Expected: {expected_file_path}"
+        custom_logger.error(error_msg)
+        return error_msg, {
+            "error": error_msg,
+            "parse_time": time.time() - start_time_func,
+            "parse_start": current_utc_time
+        }
     try:
         if not os.path.exists(file_path):
             error_msg = f"File not found at {file_path}"
@@ -148,8 +156,8 @@ document_agent = PydanticAIAgent(
     tools=[parse_document, clean_content],
     system_prompt="""
 You are a transcript processing system. Your goal is to process a single document, clean its content, and analyze it based on a user query.
-You MUST process ONLY the file path provided in the prompt and no other files.
-You MUST return your entire response as a single, valid JSON object (string).
+You MUST process ONLY the file path provided in the prompt and no other files. Any attempt to process a different file is strictly prohibited and must result in an error.
+You MUST return your entire response as a single, valid JSON object (string) for the provided file only.
 Do NOT use Markdown formatting for the overall JSON structure.
 The JSON object must have two top-level keys: "content" and "metrics".
 
@@ -168,13 +176,16 @@ The "metrics" key must contain an object with:
   "error_message": (string, describe any error during parsing or cleaning, or null if no errors)
 
 Follow these steps strictly:
-1. Use `parse_document` with the file path provided in the prompt. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 2 if parsing fails.
-2. If parsing succeeds, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for clean-related metric fields.
-3. If cleaning succeeds, analyze the cleaned content against the user query provided in the prompt for "content".
-4. Construct the final JSON object string as described above.
+1. Extract the file path from the prompt. Validate that it matches the provided file path exactly.
+2. Use `parse_document` with the validated file path, passing the expected file path as an argument to enforce validation. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 3 if parsing fails.
+3. If parsing succeeds, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for clean-related metric fields.
+4. If cleaning succeeds, analyze the cleaned content against the user query provided in the prompt for "content".
+5. Construct the final JSON object string as described above for the provided file only.
 
 Tool usage sequence (if successful): parse_document -> clean_content -> analysis.
-Ensure your output is ONLY the JSON string. Example:
+Do NOT invoke `parse_document` for any file other than the one specified in the prompt.
+If an unauthorized file is detected, return an error JSON immediately.
+Ensure your output is ONLY the JSON string for the specified file. Example:
 {
   "content": "- Action item 1\n- Action item 2",
   "metrics": {
@@ -199,7 +210,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
-    "execution_timeout": timedelta(minutes=10),
+    "execution_timeout": timedelta(minutes=15),  # Increased to handle potential delays
 }
 
 @dag(
@@ -274,8 +285,12 @@ Process Start Time (UTC): {process_start_time}
 """
             custom_logger.info(f"Agent prompt: {prompt}")
             try:
+                # Pass expected file path to tools via environment variable
+                os.environ['EXPECTED_FILE_PATH'] = file_path
                 result = document_agent.run_sync(prompt, timeout=300)
                 custom_logger.info(f"Agent output: {result.data}")
+                # Clear environment variable to prevent leakage
+                os.environ.pop('EXPECTED_FILE_PATH', None)
                 return result.data
             except Exception as llm_error:
                 error_msg = f"LLM processing error: {str(llm_error)}"
@@ -298,6 +313,8 @@ Process Start Time (UTC): {process_start_time}
         try:
             result = json.loads(json_string)
             custom_logger.info(f"Parsed agent output: {result}")
+            if result.get('metrics', {}).get('error_message'):
+                custom_logger.warning(f"Agent returned error: {result['metrics']['error_message']}")
             return result
         except json.JSONDecodeError as e:
             error_msg = f"JSONDecodeError: {e}. Received: {json_string[:200]}..."
@@ -409,12 +426,4 @@ Generated at: {datetime.now(timezone.utc).isoformat()}
 
     # DAG execution flow
     context_data = prepare_context()
-    agent_json_result = process_document_get_json(context_data)
-    parsed_agent_result = parse_agent_json_output(agent_json_result)
-    embedding_result = create_embeddings(parsed_agent_result)
-    store_embeddings_in_faiss(parsed_agent_result, embedding_result)
-    final_report = format_final_output(parsed_agent_result, embedding_result, context_data)
-    print(final_report)
-
-# Instantiate DAG
-transcript_processor_dag = transcript_pipeline()
+    agent_json_result = process_document_get_js
