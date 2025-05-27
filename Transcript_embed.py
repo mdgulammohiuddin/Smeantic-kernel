@@ -14,7 +14,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import openai
 
-# Download required NLTK data (only runs if not already downloaded)
+# Download required NLTK data
 try:
     nltk.data.find('corpora/stopwords')
     nltk.data.find('tokenizers/punkt')
@@ -84,31 +84,27 @@ def clean_content(raw_content: str) -> Tuple[str, Dict[str, Any]]:
     start_time_func = time.time()
     current_utc_time = datetime.now(timezone.utc).isoformat()
     try:
-        # Step 1: Remove timestamps (e.g., 12:34:56, 12:34, or HH:MM:SS.mmm formats)
+        # Remove timestamps (e.g., 12:34:56, 12:34, or HH:MM:SS.mmm)
         timestamp_pattern = r'\b\d{1,2}:\d{2}(:\d{2})?(\.\d{1,3})?\b'
         content = re.sub(timestamp_pattern, '', raw_content)
 
-        # Step 2: Remove special characters and punctuation, keep alphanumeric and spaces
+        # Remove special characters and punctuation, keep alphanumeric and spaces
         content = re.sub(r'[^\w\s]', '', content)
 
-        # Step 3: Normalize whitespace (replace multiple spaces/tabs/newlines with single space)
+        # Normalize whitespace
         content = re.sub(r'\s+', ' ', content).strip()
 
-        # Step 4: Tokenize and remove stopwords and filler words
+        # Tokenize and remove stopwords and filler words
         stop_words = set(stopwords.words('english'))
-        # Define common filler words (extend as needed)
         filler_words = {
             'um', 'uh', 'like', 'you know', 'so', 'actually', 'basically',
             'i mean', 'kind of', 'sort of', 'well', 'okay'
         }
-        # Combine stopwords and filler words
         words_to_remove = stop_words.union(filler_words)
 
-        # Tokenize the content
-        tokens = word_tokenize(content.lower())  # Convert to lowercase for consistency
+        tokens = word_tokenize(content.lower())
         filtered_tokens = [word for word in tokens if word not in words_to_remove]
 
-        # Reconstruct cleaned content
         cleaned = ' '.join(filtered_tokens)
 
         return cleaned, {
@@ -129,16 +125,16 @@ document_agent = PydanticAIAgent(
     model="gpt-4o",
     tools=[parse_document, clean_content],
     system_prompt="""
-You are a transcript processing system. Your goal is to process a document, clean its content,
-and then analyze it based on a user query.
+You are a transcript processing system. Your goal is to process a single document, clean its content, and analyze it based on a user query.
+You MUST process ONLY the file path provided in the prompt and no other files.
 You MUST return your entire response as a single, valid JSON object (string).
 Do NOT use Markdown formatting for the overall JSON structure.
-The JSON object should have two top-level keys: "content" and "metrics".
+The JSON object must have two top-level keys: "content" and "metrics".
 
-The "content" key should contain a string with query-relevant information in bullet points (this string can contain Markdown).
-If an error occurs, "content" should summarize the error.
+The "content" key must contain a string with query-relevant information in bullet points (this string can contain Markdown).
+If an error occurs, "content" must summarize the error.
 
-The "metrics" key should contain an object with the following fields:
+The "metrics" key must contain an object with:
   "file_type": (string, from parse_document metadata, or null if error)
   "file_size": (integer, from parse_document metadata, or null if error)
   "parse_time": (float, duration from parse_document metadata, or null if error)
@@ -147,18 +143,18 @@ The "metrics" key should contain an object with the following fields:
   "clean_start": (string, ISO datetime from clean_content metadata, or null if error before cleaning)
   "original_length": (integer, from clean_content metadata, or null if error before cleaning)
   "cleaned_length": (integer, from clean_content metadata, or null if error before cleaning)
-  "error_message": (string, describe any error that occurred during parsing or cleaning, or null if no errors)
+  "error_message": (string, describe any error during parsing or cleaning, or null if no errors)
 
 Follow these steps strictly:
-1. Use `parse_document` with the file path provided in the prompt. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 2 if parsing fails critically.
-2. If parsing is successful, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for other clean-related metric fields.
-3. If cleaning is successful, analyze cleaned content against the user query provided in the prompt for "content".
+1. Use `parse_document` with the file path provided in the prompt. If it fails, populate "error_message" in metrics, put an error summary in "content", and provide nulls or available data for other metric fields. Do not proceed to step 2 if parsing fails.
+2. If parsing succeeds, use `clean_content` on the raw content. If it fails, populate "error_message", summarize in "content", and provide nulls or available data for clean-related metric fields.
+3. If cleaning succeeds, analyze the cleaned content against the user query provided in the prompt for "content".
 4. Construct the final JSON object string as described above.
 
 Tool usage sequence (if successful): parse_document -> clean_content -> analysis.
-Ensure your output is ONLY the JSON string. Example of output format:
+Ensure your output is ONLY the JSON string. Example:
 {
-  "content": "- Action item 1\\n- Action item 2",
+  "content": "- Action item 1\n- Action item 2",
   "metrics": {
     "file_type": "DOCX",
     "file_size": 12345,
@@ -201,22 +197,11 @@ def transcript_pipeline():
         params = kwargs.get('params', {})
         file_name = params.get('file_name', "meeting_transcript.docx")
         logger.info(f"Received params: {params}, file_name: {file_name}")
-        # Normalize file path
-        if os.path.isabs(file_name):
-            file_path = file_name
-        else:
-            file_path = os.path.join(ASSETS_DIR, file_name)
-        user_query = params.get('user_query', "List all action items")
+        file_path = os.path.join(ASSETS_DIR, file_name) if not os.path.isabs(file_name) else file_name
         if not os.path.exists(file_path):
-            logger.warning(f"File not found: {file_path}, falling back to default")
-            # Fallback to default file
-            default_file = os.path.join(ASSETS_DIR, "meeting_transcript.docx")
-            if os.path.exists(default_file):
-                file_path = default_file
-                logger.info(f"Using default file: {file_path}")
-            else:
-                file_path = None
-                logger.error(f"Default file not found: {default_file}")
+            logger.error(f"File not found: {file_path}")
+            file_path = None
+        user_query = params.get('user_query', "List all action items")
         logger.info(f"Prepared context: file_path={file_path}, user_query={user_query}")
         return {
             "file_path": file_path,
@@ -229,6 +214,8 @@ def transcript_pipeline():
         """Agent task that processes the document and returns a JSON string."""
         try:
             file_path = context['file_path']
+            user_query = context['user_query']
+            process_start_time = context['process_start_time']
             logger.info(f"Processing file: {file_path}")
             if not file_path:
                 logger.error("No valid file path provided")
@@ -246,15 +233,15 @@ def transcript_pipeline():
                         "error_message": f"File not found at {file_path}"
                     }
                 })
-            # Pass context as a prompt string
             prompt = f"""
-            User Query: {context['user_query']}
-            File Path: {file_path}
-            Process Start Time (UTC): {context['process_start_time']}
-            """
+User Query: {user_query}
+File Path: {file_path}
+Process Start Time (UTC): {process_start_time}
+"""
+            logger.info(f"Agent prompt: {prompt}")
             result = document_agent.run_sync(prompt)
             logger.info(f"Agent output: {result.data}")
-            return result.data  # Extract the JSON string from the AgentRunResult object
+            return result.data
         except Exception as e:
             logger.error(f"Agent processing error: {e}", exc_info=True)
             return json.dumps({
