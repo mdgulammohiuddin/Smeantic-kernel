@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 # --- Setup: Logging, Environment Variables ---
 CUSTOM_LOG_DIR_NAME = "dag_run_logs"
 PROJECT_ROOT_GUESS = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CUSTOM_LOG_BASE_DIR = os.path.join(PROJECT_ROOT_GUESS, "Backend")
+CUSTOM_LOG_BASE_DIR = os.path.join(PROJECT_ROOT_DIR, "Backend")
 CUSTOM_LOG_DIR = os.path.join(CUSTOM_LOG_BASE_DIR, CUSTOM_LOG_DIR_NAME)
 
 custom_logger = logging.getLogger('FileQueryCustomLogger')
@@ -52,29 +52,37 @@ FAISS_INDEX_FILE = os.path.join(FAISS_DATA_DIR, "persisted_faiss.index")
 DOCSTORE_FILE = os.path.join(FAISS_DATA_DIR, "persisted_docstore.pkl")
 INDEX_TO_ID_FILE = os.path.join(FAISS_DATA_DIR, "persisted_index_to_id.pkl")
 
-# --- Pydantic AI Agent for Formatting Results ---
+# --- Pydantic AI Agent for Query-Specific Processing ---
 query_agent = PydanticAIAgent(
     model="gpt-4o",
     system_prompt="""
-You are a query processing system for document retrieval. Your goal is to format the results of a FAISS similarity search into a structured JSON response based on a user query.
-You MUST NOT process any files or invoke file-related tools. Your input is the user query and a list of retrieved document contents from FAISS.
-You MUST return a single, valid JSON string with no Markdown formatting outside the "results" value.
+You are an advanced query processing system for document retrieval from a FAISS index. Your goal is to analyze retrieved documents and generate a structured JSON response that directly addresses the user query with high relevance and precision. You MUST NOT process any files or invoke file-related tools. Your input consists of the user query and a list of retrieved document contents from FAISS.
 
 JSON structure:
-- "results": String with Markdown bullet points summarizing query-relevant content from retrieved documents. If empty, state the reason (e.g., "No relevant information found for the query.").
+- "results": String with Markdown bullet points containing only information directly relevant to the user query. If no relevant information is found, state "No relevant information found for the query."
 - "metrics": Object with:
   - "num_retrieved": Integer, number of documents retrieved (0 if none).
   - "error_message": String, error description, or null if no error.
 
 Steps:
 1. Extract the user query and retrieved documents from the input.
-2. If no documents are retrieved, return a JSON with an appropriate message in "results" and "num_retrieved" as 0.
-3. Analyze the documents to answer the user query, summarizing relevant information in concise Markdown bullet points.
-4. Construct and return a JSON string with the formatted results and metrics.
+2. Interpret the query's intent (e.g., question type, specific document reference like "copilot document").
+3. If no documents are retrieved, return a JSON with "results": "No relevant information found for the query." and "num_retrieved": 0.
+4. Analyze each document to identify content that directly answers the query. Focus on:
+   - Specific details requested (e.g., "main subject" should extract the primary topic).
+   - References to named entities in the query (e.g., "copilot" should prioritize documents mentioning "Copilot").
+   - Exclude irrelevant or tangentially related information.
+5. Synthesize a concise response in Markdown bullet points, ensuring each point addresses the query directly.
+6. If the query references a specific document (e.g., "copilot document"), prioritize content from documents matching that reference, if available.
+7. Construct and return a JSON string with the formatted results and metrics.
+
+Example input:
+User Query: What is the main subject of the copilot document?
+Retrieved Documents: ["Copilot enhances productivity with AI tools.", "Budget review for 2025."]
 
 Example output:
 {
-  "results": "- Main subject: Project timeline updates.\n- Action item: Schedule meeting.",
+  "results": "- Main subject of the copilot document: Enhancing productivity with AI tools.",
   "metrics": {
     "num_retrieved": 2,
     "error_message": null
@@ -101,7 +109,7 @@ default_args = {
     catchup=False,
     tags=["document_query", "pydantic-ai", "faiss", "query"],
     params={
-        "user_query": "What is the main subject of the copliot document?"
+        "user_query": "What is the main subject of the copilot document?"
     }
 )
 def file_query_pipeline():
@@ -174,8 +182,15 @@ def file_query_pipeline():
         user_query = context['user_query']
         custom_logger.info(f"Processing {len(retrieved_docs)} documents for query: {user_query}")
         prompt = f"""
-User Query: {user_query}
-Retrieved Documents: {json.dumps(retrieved_docs)}
+**User Query**: {user_query}
+
+**Retrieved Documents**:
+{json.dumps(retrieved_docs, indent=2)}
+
+**Instructions**:
+- Analyze the retrieved documents to extract information that directly answers the user query.
+- Focus on the query's intent and prioritize content relevant to any specific references (e.g., "copilot document").
+- Return a JSON string as specified in the system prompt.
 """
         custom_logger.debug(f"Agent prompt: {prompt[:500]}...")
         return prompt
@@ -234,5 +249,3 @@ Generated at: {datetime.now(timezone.utc).isoformat()}
 
 # Instantiate DAG
 file_query_dag = file_query_pipeline()
-
-
