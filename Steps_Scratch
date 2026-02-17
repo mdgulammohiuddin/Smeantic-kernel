@@ -1,0 +1,83 @@
+Steps to Create the Script
+
+Open Scratch and select the Cat Sprite.
+
+Click on the Code tab.
+
+Click on Extensions (bottom left) and add the Text to Speech extension.
+
+From Events, drag:
+
+when green flag clicked
+
+Add the Following Blocks in Order:
+
+From Looks:
+
+say "Welcome to the Jungle!" for 1 seconds
+
+From Text to Speech:
+
+speak "Welcome to the Jungle!"
+
+From Control:
+
+wait 2 seconds
+
+From Looks:
+
+say "Elephants are the largest land animals." for 1 seconds
+
+From Text to Speech:
+
+speak "Elephants are the largest land animals."
+
+From Control:
+
+wait 1 seconds
+
+From Looks:
+
+say "Monkeys love to swing on trees!" for 1 seconds
+
+From Text to Speech:
+
+speak "Monkeys love to swing on trees!"
+
+From Control:
+
+wait 1 seconds
+
+From Looks:
+
+say "Parrots can mimic human speech." for 1 seconds
+
+From Text to Speech:
+
+speak "Parrots can mimic human speech."
+
+From Control:
+
+wait 1 seconds
+
+From Looks:
+
+say "Lions are known as the kings of the jungle." for 1 seconds
+
+From Text to Speech:
+
+speak "Lions are known as the kings of the jungle."
+
+From Looks:
+
+say "Thank you!" for 1 seconds
+
+From Text to Speech:
+
+speak "Thank you!"
+
+Final Step
+
+Click the Green Flag to run the project.
+
+The cat will speak each fact with pauses in between.
